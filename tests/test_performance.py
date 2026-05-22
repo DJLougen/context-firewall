@@ -63,7 +63,7 @@ def test_rule_based_latency_p99():
 
 def test_ml_classifier_latency_p99():
     """ML classification should complete in <5ms per message (p99)."""
-    model_path = Path("models/context_firewall.joblib")
+    model_path = Path("models/honeycomb.joblib")
     if not model_path.exists():
         pytest.skip("Model not trained")
     

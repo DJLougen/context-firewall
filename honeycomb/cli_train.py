@@ -1,4 +1,4 @@
-"""CLI entry point for training the context firewall classifier."""
+"""CLI entry point for training the honey-comb classifier."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import sys
 
 
 def main() -> None:
-    """Train the context firewall classifier."""
+    """Train the honey-comb classifier."""
     parser = argparse.ArgumentParser(
-        description="Train the context firewall classifier."
+        description="Train the honey-comb classifier."
     )
     parser.add_argument(
         "train_path",
@@ -22,8 +22,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="models/context_firewall.joblib",
-        help="Output path for trained model (default: models/context_firewall.joblib).",
+        default="models/honeycomb.joblib",
+        help="Output path for trained model (default: models/honeycomb.joblib).",
     )
     parser.add_argument(
         "--test-size",

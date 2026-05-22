@@ -97,7 +97,7 @@ def build_classifier() -> Pipeline:
 def train(
     train_path: str | Path,
     eval_path: str | Path | None = None,
-    output_path: str | Path = "models/context_firewall.joblib",
+    output_path: str | Path = "models/honeycomb.joblib",
     test_size: float = 0.2,
     random_state: int = 42,
 ) -> dict[str, Any]:

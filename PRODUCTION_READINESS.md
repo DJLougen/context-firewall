@@ -207,5 +207,5 @@ The system is ready for deployment in production agent harnesses.
 ---
 
 **Contact**: DJLougen  
-**Repository**: https://github.com/DJLougen/context-firewall  
+**Repository**: https://github.com/DJLougen/honey-comb  
 **License**: MIT

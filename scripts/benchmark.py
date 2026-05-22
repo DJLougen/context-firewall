@@ -1,4 +1,4 @@
-"""Benchmark the context firewall's latency and compression ratio."""
+"""Benchmark the honey-comb's latency and compression ratio."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def benchmark_hot_loop(num_messages: int = 1000) -> dict:
 
 def benchmark_ml_classifier(num_messages: int = 1000) -> dict:
     """Benchmark with ML classifier loaded."""
-    model_path = Path("models/context_firewall.joblib")
+    model_path = Path("models/honeycomb.joblib")
     if not model_path.exists():
         return {"error": "Model not trained yet. Run: cf-train examples/train.jsonl"}
     
@@ -127,7 +127,7 @@ def benchmark_compression_ratio() -> dict:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Context Firewall Benchmark")
+    print("Honey-Comb Benchmark")
     print("=" * 60)
     
     print("\n--- Hot Loop (rule-based) ---")

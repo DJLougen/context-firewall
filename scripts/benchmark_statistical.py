@@ -38,7 +38,7 @@ def run_trial_hot_loop(num_messages: int = 1000) -> float:
 def run_trial_ml_classifier(num_messages: int = 1000, model_path: Path | None = None) -> float:
     """Run one ML trial and return per-message latency in ms."""
     if model_path is None:
-        model_path = Path("models/context_firewall.joblib")
+        model_path = Path("models/honeycomb.joblib")
     
     fw = HoneyComb(model_path=model_path)
     messages = [
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     print(f"  Throughput: {1000/stats_hot['mean']:.0f} msg/s (95% CI: [{1000/stats_hot['ci95_upper']:.0f}, {1000/stats_hot['ci95_lower']:.0f}])")
     
     # ML classifier benchmark
-    model_path = Path("models/context_firewall.joblib")
+    model_path = Path("models/honeycomb.joblib")
     if model_path.exists():
         print(f"\n--- ML Classifier Latency ({num_trials} trials × 1000 messages) ---")
         latencies_ml = []
