@@ -50,6 +50,15 @@ class HoneyCombConfig:
     # Model settings
     model_path: Optional[str] = None
     fallback_to_rules: bool = True
+
+    # Failure tee settings (rtk-style)
+    tee_enabled: bool = True
+    tee_mode: str = "failures"  # "failures", "always", or "never"
+    tee_dir: Optional[str] = None  # None = ~/.local/share/honeycomb/tee
+
+    # Gain tracking settings (rtk-style analytics)
+    gain_enabled: bool = True
+    gain_dir: Optional[str] = None  # None = ~/.local/share/honeycomb
     
     def update_from_dict(self, data: dict[str, Any]) -> None:
         """Update configuration from dictionary."""
@@ -114,6 +123,9 @@ class HoneyCombConfig:
         
         if self.log_format not in ("json", "text"):
             issues.append(f"Invalid log_format: {self.log_format}")
+
+        if self.tee_mode not in ("failures", "always", "never"):
+            issues.append(f"Invalid tee_mode: {self.tee_mode}")
         
         return issues
 

@@ -81,6 +81,21 @@ class ContentType(str, Enum):
     
     AGENT_PATCH = "agent_patch"
     """Agent's code edit or patch."""
+
+    TOOL_RESULT_GIT = "tool_result_git"
+    """Git command output (status, log, diff, push, pull, commit)."""
+
+    TOOL_RESULT_BUILD = "tool_result_build"
+    """Build/compile output (cargo build, tsc, next build, etc.)."""
+
+    TOOL_RESULT_LINT = "tool_result_lint"
+    """Lint output (ruff, eslint, clippy, golangci-lint, etc.)."""
+
+    TOOL_RESULT_CONTAINER = "tool_result_container"
+    """Container output (docker ps/images/logs, kubectl)."""
+
+    TOOL_RESULT_DIRECTORY = "tool_result_directory"
+    """Directory listing output (ls, tree, find)."""
     
     UNKNOWN = "unknown"
     """Unrecognized content type."""

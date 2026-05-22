@@ -27,8 +27,13 @@ from honeycomb.compressor import compress
 from honeycomb.features import extract_features, features_to_text
 from honeycomb.labels import ContentType, Label
 from honeycomb.observability import metrics, timer, health_checker
-from honeycomb.session import SessionState, _extract_file_paths
+from honeycomb.tee import FailureTee, get_tee
+from honeycomb.gain import GainTracker, get_tracker
+from honeycomb.command_filters import detect_and_filter
+from honeycomb.session import SessionState, _extract_file_paths, _estimate_tokens
 
+import re
+_RE_FAILURE = re.compile(r"exit[= ]*[1-9]|error|failed|traceback", re.I)
 
 # ---------------------------------------------------------------------------
 # Message types
@@ -72,6 +77,9 @@ class CompressedMessage:
     
     compressed_tokens: int
     """Approximate token count of compressed content."""
+
+    tee_path: str | None = None
+    """Path to raw output saved by failure tee (None if not saved)."""
     
     @property
     def compression_ratio(self) -> float:
@@ -265,6 +273,9 @@ class HoneyComb:
         cool_interval: int = 5,
         thread_safe: bool = True,
         metrics_enabled: bool = True,
+        tee_enabled: bool = True,
+        tee_mode: str = "failures",
+        gain_enabled: bool = True,
     ) -> None:
         """Initialize the firewall.
 
@@ -273,15 +284,19 @@ class HoneyComb:
                        rule-based classification.
             budget_config: Token budget configuration. If None, uses defaults.
             cool_interval: Run cool loop every N turns (default 5).
-            thread_safe: Enable thread-safe operations (default True). Set to False
-                        for single-threaded use to improve performance.
-            metrics_enabled: Enable metrics recording (default True). Set to False
-                           for maximum performance.
+            thread_safe: Enable thread-safe operations (default True).
+            metrics_enabled: Enable metrics recording (default True).
+            tee_enabled: Enable failure tee (default True). Saves raw output
+                        on command failure for later re-read.
+            tee_mode: When to save tee files: "failures" (default), "always", "never".
+            gain_enabled: Enable gain tracking (default True). Records token savings.
         """
         self.session = SessionState(thread_safe=thread_safe)
         self.budget = BudgetManager(budget_config)
         self.cool_interval = cool_interval
         self._metrics_enabled = metrics_enabled
+        self._tee = FailureTee(enabled=tee_enabled, mode=tee_mode)
+        self._gain = GainTracker() if gain_enabled else None
 
         # Load ML classifier if provided
         self._classifier: MLClassifier | None = None
@@ -335,10 +350,44 @@ class HoneyComb:
             else:
                 label = _classify_rules(message, content_type, self.session)
 
-            # Compress (deterministic, ~0.1ms)
-            compressed_content = compress(message.content, content_type, label)
+            # Command filter: call once, share result with compress + tee
+            filter_result = None
+            if content_type in (ContentType.TOOL_RESULT_COMMAND, ContentType.TOOL_RESULT_TEST) and len(message.content) > 80:
+                filter_result = detect_and_filter(message.content)
 
-            # Record in session (pass file_paths to avoid re-extraction)
+            # Compress (deterministic, ~0.1ms)
+            compressed_content = compress(message.content, content_type, label, filter_result=filter_result)
+
+            # Failure tee: save raw output on command failure (rtk-style)
+            tee_path = None
+            if self._tee.enabled and content_type.is_tool_result() and len(message.content) > 500:
+                is_failure = (
+                    filter_result.is_failure if filter_result
+                    else bool(_RE_FAILURE.search(message.content[:6144]))
+                )
+                tee_result = self._tee.maybe_save(
+                    content=message.content,
+                    command=filter_result.command if filter_result else content_type.value,
+                    is_failure=is_failure,
+                )
+                if tee_result:
+                    tee_path = tee_result.tee_path
+                    compressed_content += "\n" + tee_result.reference_line
+
+            # Gain tracking: record token savings (rtk-style analytics)
+            if self._gain is not None:
+                cmd_name = (
+                    filter_result.command if filter_result
+                    else content_type.value
+                )
+                self._gain.record(
+                    command=cmd_name,
+                    raw_tokens=_estimate_tokens(message.content),
+                    compressed_tokens=_estimate_tokens(compressed_content),
+                    label=label.value,
+                )
+
+            # Record in session
             entry = self.session.record(
                 role=message.role,
                 content_type=content_type,
@@ -359,14 +408,10 @@ class HoneyComb:
                     label=label.value,
                     compression_ratio=compression_ratio,
                 )
-
-                # Update session state gauges
                 active = len(self.session.get_active_entries())
                 tokens = self.session.get_total_tokens()
                 metrics.update_session_state(
-                    active=active,
-                    tokens=tokens,
-                    turns=self.session.turn_count,
+                    active=active, tokens=tokens, turns=self.session.turn_count,
                 )
 
             return CompressedMessage(
@@ -376,6 +421,7 @@ class HoneyComb:
                 content_type=content_type,
                 original_tokens=entry.original_tokens,
                 compressed_tokens=entry.compressed_tokens,
+                tee_path=tee_path,
             )
         except Exception as e:
             metrics.record_error()

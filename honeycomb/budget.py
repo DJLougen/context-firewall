@@ -63,41 +63,40 @@ class BudgetManager:
     
     def enforce(self, session: "SessionState") -> int:
         """Enforce the token budget by downgrading entries.
-        
+
         Iteratively downgrades the lowest-priority entries to more
         aggressive compression until the budget is met.
-        
+
         Returns the number of entries downgraded.
         """
         downgraded = 0
-        
+
+        # Sort once by priority (lowest first), then by turn age (oldest first)
+        active = session.get_active_entries()
+        candidates = sorted(active, key=lambda e: (e.label.priority(), e.turn))
+        candidate_idx = 0
+
         while session.get_total_tokens() > self.config.target_tokens:
-            # Find the lowest-priority active entry
-            active = session.get_active_entries()
-            if not active:
+            if candidate_idx >= len(candidates):
                 break
-            
-            # Sort by priority (lowest first), then by turn age (oldest first)
-            candidates = sorted(
-                active,
-                key=lambda e: (e.label.priority(), e.turn),
-            )
-            
-            # Find the first entry that can be downgraded
+
+            # Find the next entry that can be downgraded
             entry = None
-            for candidate in candidates:
+            while candidate_idx < len(candidates):
+                candidate = candidates[candidate_idx]
+                candidate_idx += 1
                 if _DOWNGRADE.get(candidate.label, candidate.label) != candidate.label:
                     entry = candidate
                     break
-            
+
             if entry is None:
                 # No more downgrades possible
                 break
-            
+
             # Apply downgrade
             new_label = _DOWNGRADE[entry.label]
             old_tokens = entry.compressed_tokens
-            
+
             if new_label == Label.DROP:
                 session._cached_total_tokens -= old_tokens
                 entry.mark_dropped()
@@ -112,13 +111,13 @@ class BudgetManager:
                 session._cached_total_tokens += (new_tokens - old_tokens)
                 entry.compressed_tokens = new_tokens
                 entry.label = new_label
-            
+
             downgraded += 1
-            
+
             # Safety: if no tokens were freed, break to avoid infinite loop
             if new_label != Label.DROP:
                 new_tokens = entry.compressed_tokens
                 if new_tokens >= old_tokens:
                     break
-        
+
         return downgraded
