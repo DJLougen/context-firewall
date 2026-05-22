@@ -1,6 +1,6 @@
 """Honey-Comb: CPU-only inline context compression for agent harnesses. Keep the honey, drop the wax."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 from honeycomb.labels import Label, ContentType
 from honeycomb.firewall import HoneyComb, Message, CompressedMessage

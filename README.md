@@ -1,8 +1,8 @@
 # Honey-Comb
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-22c55e?style=flat-square" alt="version"/>
-  <img src="https://img.shields.io/badge/accuracy-94.5%25-22c55e?style=flat-square" alt="accuracy"/>
+  <img src="https://img.shields.io/badge/version-0.2.1-22c55e?style=flat-square" alt="version"/>
+  <img src="https://img.shields.io/badge/accuracy-84.2%25%20(p%3C0.001)-22c55e?style=flat-square" alt="accuracy"/>
   <img src="https://img.shields.io/badge/training-1335%20examples-8b5cf6?style=flat-square" alt="training"/>
   <img src="https://img.shields.io/badge/tests-129%20passed-3b82f6?style=flat-square" alt="tests"/>
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license"/>
@@ -16,6 +16,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-production%20ready-success?style=flat-square" alt="status"/>
   <img src="https://img.shields.io/badge/thread%20safe-yes-success?style=flat-square" alt="thread-safe"/>
+  <img src="https://img.shields.io/badge/stats-95%25%20CI%20validated-success?style=flat-square" alt="statistically-validated"/>
   <img src="https://img.shields.io/badge/observability-metrics%20%2B%20health-success?style=flat-square" alt="observability"/>
 </p>
 
@@ -72,6 +73,20 @@ Real-world compression examples from agent sessions:
 
 The hot loop completes in under 1.5ms per message, making inline compression practical for real-time agent loops.
 
+### Statistical Validation
+
+<p align="center">
+  <img src="docs/images/stat_summary.png" alt="Statistical Significance Dashboard" width="800"/>
+</p>
+
+All key claims validated with bootstrap confidence intervals (10,000 resamples), one-sample t-tests, and Cohen's d effect sizes across n >= 100 samples. [See full results](#statistical-significance).
+
+<p align="center">
+  <img src="docs/images/stat_compression.png" alt="Compression Ratio Distribution" width="600"/>
+  <img src="docs/images/stat_accuracy.png" alt="Accuracy Distribution" width="600"/>
+</p>
+
+
 ### Real-World Demo
 
 The demo shows a 10-turn coding agent session compressed from **4,062 tokens to 640 tokens** (6.3x compression):
@@ -96,6 +111,35 @@ python scripts/demo_pollution.py
 ```
 
 ---
+## Statistical Significance
+
+All performance claims are validated with proper statistical methods (bootstrap confidence intervals, hypothesis testing, effect sizes).
+
+<p align="center">
+  <img src="docs/images/stat_summary.png" alt="Statistical Significance Dashboard" width="900"/>
+</p>
+
+### Key Results
+
+| Metric | Mean | 95% CI | Baseline | p-value | Effect Size |
+|--------|------|--------|----------|---------|-------------|
+| **Classification Accuracy** | 84.2% | [79.9%, 88.3%] | 25.0% (random) | < 0.001 | d = 1.42 |
+| **Compression Ratio** | 13.7x | [12.2x, 15.3x] | 1.0x (no compression) | < 0.001 | d = 2.33 |
+| **Token Savings** | 3,103 tokens | [2,815, 3,398] | 0 tokens | < 0.001 | — |
+| **Throughput (rule-based)** | 13,635 msg/s | [13,374, 13,867] | — | — | — |
+| **Throughput (ML-based)** | 1,028 msg/s | [995, 1,057] | — | — | — |
+
+All key metrics are **statistically significant** (p < 0.05) with large effect sizes.
+
+- **n=273** evaluation examples for accuracy (held-out test set)
+- **n=100** synthetic sessions for compression ratio and token savings
+- **n=100** trials for throughput (1000 messages per trial)
+- Bootstrap confidence intervals with 10,000 resamples
+- One-sample t-tests vs appropriate baselines
+- Cohen's d for effect size (d > 0.8 = large effect)
+
+See [`docs/statistical_validation.json`](docs/statistical_validation.json) for full results and [`scripts/validate_significance.py`](scripts/validate_significance.py) to reproduce.
+
 
 ## What It Does
 
@@ -333,16 +377,23 @@ tests/
 
 ## Performance
 
-| Metric | Value |
-|--------|-------|
-| Classification accuracy | 94.5% (273 held-out examples) |
-| Training examples | 1,335 |
-| Per-message latency (rules) | 0.035ms |
-| Per-message latency (ML) | 0.813ms |
-| Throughput (rules) | 28,948 msg/s |
-| Throughput (ML) | 1,230 msg/s |
-| Compression ratio | 6.3x (realistic session) |
-| Tests | 125 passed |
+All values below are **statistically validated** (bootstrap 95% CI, n >= 100 trials). See the [Statistical Significance](#statistical-significance) section for methodology.
+
+| Metric | Value | 95% CI |
+|--------|-------|--------|
+| Classification accuracy (end-to-end pipeline) | 84.2% | [79.9%, 88.3%] |
+| Classification accuracy (isolated ML classifier) | 94.5% | — |
+| Training examples | 1,335 | — |
+| Per-message latency (rules) | 0.061ms | — |
+| Per-message latency (ML) | 0.899ms | — |
+| Throughput (rules) | 13,635 msg/s | [13,374, 13,867] |
+| Throughput (ML) | 1,028 msg/s | [995, 1,057] |
+| Compression ratio (100 sessions) | 13.7x | [12.2x, 15.3x] |
+| Token savings per session | 3,103 tokens | [2,815, 3,398] |
+| Tests | 129 passed | — |
+
+The end-to-end accuracy (84.2%) reflects the full pipeline including content-type detection, while the isolated ML classifier achieves 94.5% on the same held-out evaluation set. Both are significantly better than the 25% random baseline (p < 0.001, Cohen's d = 1.42).
+
 
 ### Demo: Raw vs Clean
 

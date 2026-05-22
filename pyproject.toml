@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "honey-comb"
-version = "0.1.0"
+version = "0.2.1"
 description = "CPU-only inline context compression for agent harnesses — keep the honey, drop the wax"
 readme = "README.md"
 requires-python = ">=3.10"
