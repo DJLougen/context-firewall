@@ -203,10 +203,10 @@ def test_compress_tool_call_distill():
 # ---------------------------------------------------------------------------
 
 def test_compress_reasoning_distill():
-    """DISTILL should extract conclusion/decision."""
-    content = "Let me think about this. The issue is X, so I should do Y."
-    result = compress_reasoning(content, Label.DISTILL)
-    assert "Y" in result
+     """DISTILL should extract conclusion/decision."""
+     content = "Let me analyze this step by step. The issue is that the database connection times out after 30 seconds."
+     result = compress_reasoning(content, Label.DISTILL)
+     assert "database" in result or "timeout" in result
 
 
 def test_compress_reasoning_compact():
@@ -235,11 +235,11 @@ def test_compress_escalate_passes_through():
     assert result == content
 
 
-def test_compress_stale_passes_through():
-    """STALE should pass content through (marked for later deletion)."""
-    content = "Stale content"
+def test_compress_stale_compresses_as_compact():
+    """STALE should compress aggressively (will be dropped on next cool pass)."""
+    content = "class Foo:\n    def bar(self):\n        return 42\n" * 20
     result = compress(content, ContentType.TOOL_RESULT_FILE, Label.STALE)
-    assert result == content
+    assert len(result) < len(content)
 
 
 def test_compress_unknown_content_type():

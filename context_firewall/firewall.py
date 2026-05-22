@@ -23,7 +23,7 @@ from context_firewall.budget import BudgetConfig, BudgetManager
 from context_firewall.compressor import compress
 from context_firewall.features import extract_features, features_to_text
 from context_firewall.labels import ContentType, Label
-from context_firewall.session import SessionState
+from context_firewall.session import SessionState, _extract_file_paths
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,9 @@ class Message:
     
     content_type: ContentType | None = None
     """Optional content type hint. If None, the firewall infers it."""
+    def __repr__(self) -> str:
+        content_preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
+        return f"Message(role={self.role!r}, content={content_preview!r})"
 
 
 @dataclass
@@ -72,6 +75,9 @@ class CompressedMessage:
         if self.compressed_tokens == 0:
             return 0.0
         return self.original_tokens / self.compressed_tokens
+    def __repr__(self) -> str:
+        return (f"CompressedMessage(role={self.role!r}, label={self.label.value!r}, "
+                f"tokens={self.original_tokens}->{self.compressed_tokens})")
 
 
 # ---------------------------------------------------------------------------
@@ -91,10 +97,13 @@ def _infer_content_type(message: Message) -> ContentType:
     if role == "user":
         return ContentType.USER_GOAL
     
-    # Assistant messages: reasoning or patches
+    # Assistant messages: reasoning, patches, or tool calls
     if role == "assistant":
         if re.search(r"^[-+]{3} |^diff --git|^@@ ", content, re.M):
             return ContentType.AGENT_PATCH
+        # JSON tool call: {"name": "read_file", ...}
+        if re.search(r'"name"\s*:\s*"(?:read_file|run_tests|apply_patch|search|run_command)"', content):
+            return ContentType.TOOL_CALL
         return ContentType.AGENT_REASONING
     
     # Tool messages: infer from content
@@ -115,11 +124,11 @@ def _infer_content_type(message: Message) -> ContentType:
         if re.search(r"[^\s:]+:\d+:", content):
             return ContentType.TOOL_RESULT_SEARCH
         
-        # Command output (has exit code or generic output)
-        if re.search(r"exit[= ]+\d+|\$\s+\w+", content, re.I):
+        # Command output (has exit code or $ prompt)
+        if re.search(r"exit[= ]+\d+|^\$\s+\w+", content, re.M):
             return ContentType.TOOL_RESULT_COMMAND
-        
-        return ContentType.TOOL_RESULT_COMMAND
+
+        # Default: unknown (not command)
     
     return ContentType.UNKNOWN
 
@@ -263,9 +272,18 @@ class ContextFirewall:
         # Load ML classifier if provided
         self._classifier: MLClassifier | None = None
         if model_path is not None:
-            import joblib
-            model = joblib.load(model_path)
-            self._classifier = MLClassifier(model)
+            try:
+                from context_firewall.classifier import _load_model
+                pipeline, _ = _load_model(model_path)
+                self._classifier = MLClassifier(pipeline)
+            except Exception as e:
+                import warnings
+                warnings.warn(
+                    f"Failed to load ML classifier from {model_path}: {e}. "
+                    f"Falling back to rule-based classification.",
+                    stacklevel=2,
+                )
+                self._classifier = None
     
     def process(self, message: Message) -> CompressedMessage:
         """Process a message through the hot loop.
@@ -281,8 +299,11 @@ class ContextFirewall:
         # Infer content type if not provided
         content_type = message.content_type or _infer_content_type(message)
         
-        # Extract features
-        features = extract_features(message.content, message.role, self.session)
+        # Extract file paths once (optimization)
+        file_paths = _extract_file_paths(message.content)
+        
+        # Extract features (pass file_paths to avoid re-extraction)
+        features = extract_features(message.content, message.role, self.session, file_paths)
         features_text = features_to_text(features)
         
         # Classify (hot loop: ~1-3ms)
@@ -294,13 +315,14 @@ class ContextFirewall:
         # Compress (deterministic, ~0.1ms)
         compressed_content = compress(message.content, content_type, label)
         
-        # Record in session
+        # Record in session (pass file_paths to avoid re-extraction)
         entry = self.session.record(
             role=message.role,
             content_type=content_type,
             label=label,
             original=message.content,
             compressed=compressed_content,
+            file_paths=file_paths,
         )
         
         # Cool loop: periodic staleness pass
@@ -327,12 +349,14 @@ class ContextFirewall:
     
     def get_context_window(self) -> list[dict[str, str]]:
         """Get the current compressed context window.
-        
+
         Returns a list of message dicts suitable for sending to an LLM.
+        Filters out dropped entries and entries with empty content.
         """
         return [
             {"role": entry.role, "content": entry.compressed_content}
             for entry in self.session.get_active_entries()
+            if entry.compressed_content  # Skip empty (DROP'd) entries
         ]
     
     def get_stats(self) -> dict[str, Any]:

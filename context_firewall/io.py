@@ -110,8 +110,10 @@ def load_training_data(path: str | Path) -> tuple[list[str], list[str]]:
     feature_texts = []
     labels = []
     
+    skipped = 0
     for row in rows:
         if not validate_row(row):
+            skipped += 1
             continue
         
         features = extract_features(row["content"], row["role"])
@@ -119,5 +121,13 @@ def load_training_data(path: str | Path) -> tuple[list[str], list[str]]:
         
         feature_texts.append(feature_text)
         labels.append(row["label"])
+
+    if skipped > 0:
+        import warnings
+        warnings.warn(
+            f"Skipped {skipped} invalid rows in {path}. "
+            f"Each row needs: role, content, content_type, label.",
+            stacklevel=2,
+        )
     
     return feature_texts, labels

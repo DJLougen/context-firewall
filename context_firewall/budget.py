@@ -99,6 +99,7 @@ class BudgetManager:
             old_tokens = entry.compressed_tokens
             
             if new_label == Label.DROP:
+                session._cached_total_tokens -= old_tokens
                 entry.mark_dropped()
             else:
                 # Re-compress with new label
@@ -107,7 +108,9 @@ class BudgetManager:
                     entry.content_type,
                     new_label,
                 )
-                entry.compressed_tokens = max(1, len(entry.compressed_content) // 4)
+                new_tokens = max(0, len(entry.compressed_content) // 4)
+                session._cached_total_tokens += (new_tokens - old_tokens)
+                entry.compressed_tokens = new_tokens
                 entry.label = new_label
             
             downgraded += 1

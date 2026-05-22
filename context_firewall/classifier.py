@@ -2,9 +2,26 @@
 
 Uses TF-IDF features + VotingClassifier (SGD + Naive Bayes + Logistic Regression)
 with optional probability calibration. Same pattern as busyBee-cpu.
+
+Model versioning: trained models include a _cf_version attribute for
+forward compatibility checks.
 """
 
 from __future__ import annotations
+
+_MODEL_VERSION = "0.1.0"
+
+
+def _load_model(model_path: str | Path) -> tuple[Any, str | None]:
+    """Load a model, handling both old (bare pipeline) and new (versioned dict) formats.
+
+    Returns (pipeline, version_string).
+    """
+    loaded = joblib.load(model_path)
+    if isinstance(loaded, dict) and "pipeline" in loaded:
+        return loaded["pipeline"], loaded.get("version")
+    # Legacy format: bare pipeline
+    return loaded, None
 
 import random
 from pathlib import Path
@@ -129,8 +146,8 @@ def train(
     # Save
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(pipeline, output_path)
-    print(f"\nModel saved to {output_path}")
+    joblib.dump({"pipeline": pipeline, "version": _MODEL_VERSION}, output_path)
+    print(f"Model saved to {output_path} (version {_MODEL_VERSION})")
     
     return {
         "accuracy": accuracy,
@@ -149,7 +166,9 @@ def evaluate(
     Returns evaluation metrics.
     """
     # Load model
-    pipeline = joblib.load(model_path)
+    pipeline, version = _load_model(model_path)
+    if version:
+        print(f"Model version: {version}")
     
     # Load data
     feature_texts, labels = load_training_data(eval_path)
@@ -180,7 +199,7 @@ def predict(
     from context_firewall.features import extract_features
     
     # Load model
-    pipeline = joblib.load(model_path)
+    pipeline, _ = _load_model(model_path)
     
     # Extract features
     features = extract_features(content, role)

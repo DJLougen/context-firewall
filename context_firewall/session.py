@@ -60,15 +60,24 @@ class ContextEntry:
     def mark_dropped(self) -> None:
         """Mark this entry as dropped."""
         self.dropped = True
-
-
 def _estimate_tokens(text: str) -> int:
-    """Estimate token count (~4 chars per token for English/code)."""
+    """Estimate token count (~4 chars per token for English/code).
+
+    Returns 0 for empty strings (dropped entries).
+    """
+    if not text:
+        return 0
     return max(1, len(text) // 4)
 
 
 def _extract_file_paths(content: str) -> list[str]:
-    """Extract file paths mentioned in content."""
+    """Extract file paths mentioned in content.
+
+    Caps content to 10KB for performance on large messages.
+    """
+    # Cap content size for analysis
+    analysis_content = content[:10_000]
+
     # Match common path patterns
     patterns = [
         r"[A-Za-z]:[/\\][\w./\\-]+\.\w+",     # Windows absolute
@@ -77,7 +86,7 @@ def _extract_file_paths(content: str) -> list[str]:
     ]
     paths = set()
     for pattern in patterns:
-        paths.update(re.findall(pattern, content))
+        paths.update(re.findall(pattern, analysis_content))
     return sorted(paths)
 
 
@@ -106,6 +115,12 @@ class SessionState:
         
         # Tool call tracking
         self._tool_calls: dict[str, int] = {}  # tool_name -> last_call_turn
+        
+        # Optimization: track last entry index checked in cool_pass
+        self._last_cool_pass_index: int = 0
+        
+        # Optimization: cached token total (updated incrementally)
+        self._cached_total_tokens: int = 0
     
     def advance_turn(self) -> int:
         """Advance to the next turn. Returns the new turn number."""
@@ -119,13 +134,15 @@ class SessionState:
         label: Label,
         original: str,
         compressed: str,
+        file_paths: list[str] | None = None,
     ) -> ContextEntry:
         """Record a new context entry.
         
         Updates internal tracking (file reads, hashes, etc.) as a side effect.
         """
         content_hash = _content_hash(original)
-        file_paths = _extract_file_paths(original)
+        if file_paths is None:
+            file_paths = _extract_file_paths(original)
         
         entry = ContextEntry(
             turn=self.turn_count,
@@ -142,6 +159,7 @@ class SessionState:
         
         self.entries.append(entry)
         self._content_hashes.add(content_hash)
+        self._cached_total_tokens += entry.compressed_tokens
         
         # Update file tracking
         if content_type == ContentType.TOOL_RESULT_FILE:
@@ -172,9 +190,10 @@ class SessionState:
                 return self.turn_count - entry.turn
         return 0
     
-    def get_file_age(self, content: str) -> int:
+    def get_file_age(self, content: str, file_paths: list[str] | None = None) -> int:
         """Get the turn age since a file referenced in content was last accessed."""
-        file_paths = _extract_file_paths(content)
+        if file_paths is None:
+            file_paths = _extract_file_paths(content)
         if not file_paths:
             return 0
         
@@ -228,8 +247,11 @@ class SessionState:
         return [e for e in self.entries if not e.dropped]
     
     def get_total_tokens(self) -> int:
-        """Get total token count of active entries."""
-        return sum(e.compressed_tokens for e in self.get_active_entries())
+        """Get total token count of active entries.
+        
+        Uses cached value for O(1) performance.
+        """
+        return self._cached_total_tokens
     
     def get_total_original_tokens(self) -> int:
         """Get total token count of original (uncompressed) entries."""
@@ -248,19 +270,24 @@ class SessionState:
         
         Marks stale and superseded entries as dropped.
         Returns the number of entries dropped.
+        
+        Optimization: Only check file reads and STALE entries.
+        Other content types can't become stale/superseded.
         """
         dropped = 0
+        
         for entry in self.entries:
             if entry.dropped:
                 continue
             
-            if self.is_file_stale(entry):
-                entry.mark_dropped()
-                dropped += 1
-            elif self.is_superseded(entry):
-                entry.mark_dropped()
-                dropped += 1
+            # Only check entries that can become stale/superseded
+            if entry.content_type == ContentType.TOOL_RESULT_FILE:
+                if self.is_file_stale(entry) or self.is_superseded(entry):
+                    self._cached_total_tokens -= entry.compressed_tokens
+                    entry.mark_dropped()
+                    dropped += 1
             elif entry.label == Label.STALE:
+                self._cached_total_tokens -= entry.compressed_tokens
                 entry.mark_dropped()
                 dropped += 1
         

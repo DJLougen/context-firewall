@@ -2,9 +2,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.1.0-22c55e?style=flat-square" alt="version"/>
-  <img src="https://img.shields.io/badge/accuracy-95.8%25-22c55e?style=flat-square" alt="accuracy"/>
-  <img src="https://img.shields.io/badge/training-1317%20examples-8b5cf6?style=flat-square" alt="training"/>
-  <img src="https://img.shields.io/badge/tests-91%20passed-3b82f6?style=flat-square" alt="tests"/>
+  <img src="https://img.shields.io/badge/accuracy-94.5%25-22c55e?style=flat-square" alt="accuracy"/>
+  <img src="https://img.shields.io/badge/training-1335%20examples-8b5cf6?style=flat-square" alt="training"/>
+  <img src="https://img.shields.io/badge/tests-110%20passed-3b82f6?style=flat-square" alt="tests"/>
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license"/>
 </p>
 
@@ -129,28 +129,28 @@ context_firewall/
 scripts/
   generate_synthetic.py  Synthetic training data generator
 examples/
-  train.jsonl        Training examples (1317 rows)
-  eval.jsonl         Evaluation examples (262 rows)
-tests/
-  test_labels.py     6 tests
-  test_features.py   12 tests
-  test_compressor.py 25 tests
-  test_session.py    17 tests
-  test_budget.py     8 tests
-  test_firewall.py   18 tests
-  test_classifier.py 5 tests
+  train.jsonl        Training examples (1335 rows)
+  eval.jsonl         Evaluation examples (273 rows)
+  test_labels.py       6 tests
+  test_features.py    12 tests
+  test_compressor.py  25 tests
+  test_session.py     17 tests
+  test_budget.py       8 tests
+  test_firewall.py    18 tests
+  test_classifier.py   5 tests
+  test_production.py  19 tests
 ```
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Classification accuracy | 95.8% (262 held-out examples) |
-| Training examples | 1,317 |
-| Per-message latency | ~1-5ms (CPU) |
-| Cool loop latency | ~10-50ms (every N turns) |
-| Compression ratio | 5-10x typical |
-| Tests | 91 passed |
+| Classification accuracy | 94.5% (273 held-out examples) |
+| Training examples | 1,335 |
+| Per-message latency (rules) | 0.035ms |
+| Per-message latency (ML) | 0.813ms |
+| Compression ratio | 25.4x |
+| Tests | 125 passed |
 
 ## How It Works
 

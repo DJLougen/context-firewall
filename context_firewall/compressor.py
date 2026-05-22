@@ -70,9 +70,16 @@ def compress_file_content(content: str, label: Label) -> str:
     lines = content.split("\n")
     line_count = len(lines)
     
-    # Try to extract file path from first line or context
-    path_match = re.search(r"^(?:File: |# |// )([^\n]+\.[a-z]+)", content, re.I)
-    path = path_match.group(1) if path_match else "unknown_file"
+    # Try to extract file path from first line or content
+    # Match: "File: path", "# path", "// path", or bare path on first line
+    path_match = re.search(
+        r"(?:^(?:File: |# |// )?)"
+        r"([A-Za-z]:[/\\][\w./\\-]+\.\w+"  # Windows absolute
+        r"|/[\w./-]+\.\w+"                  # Unix absolute
+        r"|(?:src|lib|tests?|scripts?|pkg|cmd|internal)/[\w./-]+\.\w+)",  # Relative
+        content, re.I | re.M,
+    )
+    path = path_match.group(1) if path_match else "file"
     
     if label == Label.COMPACT:
         return f"{path} ({line_count} lines)"
@@ -105,7 +112,10 @@ def compress_command_output(content: str, label: Label) -> str:
     """
     if label == Label.DROP:
         return ""
-    
+
+    if not content.strip():
+        return ""
+
     lines = content.split("\n")
     
     # Look for exit code
@@ -133,23 +143,36 @@ def compress_error_trace(content: str, label: Label) -> str:
     lines = content.split("\n")
     
     # Extract error type and message
-    error_match = re.search(r"(\w+Error|\w+Exception):\s*(.+)", content)
+    error_match = re.search(r"(\w+Error|\w+Exception|TypeError|ReferenceError|SyntaxError):\s*(.+)", content)
     if error_match:
         error_type = error_match.group(1)
-        error_msg = error_match.group(2).strip()[:100]
+        error_msg = error_match.group(2).strip()[:200]
         error_line = f"{error_type}: {error_msg}"
     else:
-        error_line = "Error: " + (lines[0][:100] if lines else "unknown")
-    
+        error_line = "Error: " + (lines[0][:200] if lines else "unknown")
+
     if label == Label.COMPACT:
         return error_line
-    
+
     # DISTILL: error + top frame
+    # Python: File "foo.py", line 42
     frame_match = re.search(r'File "([^"]+)", line (\d+)', content)
     if frame_match:
         frame = f"at {frame_match.group(1)}:{frame_match.group(2)}"
         return f"{error_line}\n{frame}"
-    
+
+    # Node.js: at functionName (file.js:10:5)
+    node_match = re.search(r"at\s+\S+\s+\(([^)]+):(\d+):\d+\)", content)
+    if node_match:
+        frame = f"at {node_match.group(1)}:{node_match.group(2)}"
+        return f"{error_line}\n{frame}"
+
+    # Rust: at src/foo.rs:42
+    rust_match = re.search(r"at\s+([\w/]+\.rs):(\d+)", content)
+    if rust_match:
+        frame = f"at {rust_match.group(1)}:{rust_match.group(2)}"
+        return f"{error_line}\n{frame}"
+
     return error_line
 
 
@@ -165,8 +188,8 @@ def compress_search_result(content: str, label: Label) -> str:
     
     lines = content.split("\n")
     
-    # Extract file:line patterns
-    matches = re.findall(r"([^\s:]+):(\d+):", content)
+    # Extract file:line patterns (require file extension to avoid URL/time false positives)
+    matches = re.findall(r"([\w./\\-]+\.\w+):(\d+):", content)
     
     if label == Label.COMPACT:
         return f"Search: {len(matches)} matches"
@@ -188,10 +211,16 @@ def compress_tool_call(content: str, label: Label) -> str:
         return ""
     
     # DISTILL: just the tool name
+    # Try JSON format: {"name": "read_file", ...}
+    json_match = re.search(r'"name"\s*:\s*"([^"]+)"', content)
+    if json_match:
+        return f"Called: {json_match.group(1)}"
+
+    # Try key=value format: tool_name: read_file
     tool_match = re.search(r"tool[_ ]?name[\"']?\s*[:=]\s*[\"']?(\w+)", content, re.I)
     if tool_match:
         return f"Called: {tool_match.group(1)}"
-    
+
     return "Tool call"
 
 
@@ -225,36 +254,39 @@ def compress_agent_patch(content: str, label: Label) -> str:
 
 def compress_reasoning(content: str, label: Label) -> str:
     """Compress agent reasoning.
-    
+
     DISTILL: Extract conclusion/decision.
     COMPACT: "Reasoning: [first 50 chars]"
     DROP: Empty string.
     """
     if label == Label.DROP:
         return ""
-    
+
     if label == Label.COMPACT:
         first_line = content.split("\n")[0][:50]
         return f"Reasoning: {first_line}..."
-    
-    # DISTILL: look for conclusion markers
-    conclusion_markers = [
-        r"(?:so|therefore|thus|conclusion)[:\s]+(.+?)(?:\.|$)",
-        r"(?:decided to|will|should|going to)[:\s]+(.+?)(?:\.|$)",
-    ]
-    
-    for pattern in conclusion_markers:
-        match = re.search(pattern, content, re.I)
-        if match:
-            return f"Decision: {match.group(1).strip()}"
-    
-    # Fallback: last sentence
-    sentences = re.split(r"[.!?]\s+", content)
-    if sentences:
-        return f"Decision: {sentences[-1].strip()[:100]}"
-    
-    return f"Reasoning: {content[:100]}..."
 
+    # DISTILL: look for conclusion markers
+    # Avoid "so" — too common in English, causes false positives
+    conclusion_markers = [
+        r"(?:therefore|thus|hence|conclusion)[:\s]+(.{10,}?)(?:\.|$)",
+        r"(?:decided to|will|should|going to)\s+(.{10,}?)(?:\.|$)",
+        r"(?:the fix is|the issue is|the problem is)[:\s]+(.{10,}?)(?:\.|$)",
+    ]
+
+    for pattern in conclusion_markers:
+        match = re.search(pattern, content, re.I | re.M)
+        if match:
+            result = match.group(1).strip()
+            return f"Decision: {result[:200]}"
+
+    # Fallback: last non-empty sentence
+    sentences = re.split(r"[.!?]\s+", content)
+    last = next((s.strip() for s in reversed(sentences) if s.strip()), "")
+    if last:
+        return f"Decision: {last[:200]}"
+
+    return f"Reasoning: {content[:200]}..."
 
 def compress_user_goal(content: str, label: Label) -> str:
     """Compress user goals.
@@ -309,9 +341,10 @@ def compress(content: str, content_type: ContentType, label: Label) -> str:
     if label == Label.ESCALATE:
         return content
     
-    # STALE: mark for deletion but don't compress yet
+    # STALE: compress aggressively (will be dropped on next cool pass)
     if label == Label.STALE:
-        return content
+        # Treat as COMPACT for compression purposes
+        label = Label.COMPACT
     
     # Get the compressor for this content type
     compressor_fn = _COMPRESSORS.get(content_type)
