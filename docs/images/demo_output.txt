@@ -1,0 +1,373 @@
+
+[1m====================================================================================================
+  CONTEXT FIREWALL DEMO: Raw Agent Trace vs Cleaned Context
+====================================================================================================[0m
+
+  This demo shows a 10-turn coding agent session.
+  [91mLEFT[0m  = what the LLM receives today (every byte of tool output)
+  [92mRIGHT[0m = what the LLM receives through the context firewall
+
+[2m====================================================================================================[0m
+
+[1m  TURN 1  |  [96mSYSTEM[0m  |  content_type=system  label=core
+  [2mtokens: 137 raw  ->  137 clean  (1.0x compression, 0 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m You are an expert software engineer. You have access to tools: read_file, run_tests, apply_patch, escalate.
+  [91m[2m|[0m Always read the file before editing. Always run tests after editing.
+  [91m[2m|[0m If tests fail, read the error carefully and fix it.
+  [91m[2m|[0m Never delete tests. Never skip verification.
+  [91m[2m|[0m When you are done, call escalate with a summary.
+  [91m[2m|[0m Your current working directory is /home/user/project.
+  [91m[2m|[0m The project uses Python 3.12, pytest, and ruff for linting.
+  [91m[2m|[0m The test suite has 200+ tests across 15 modules.
+  [91m[2m|[0m Remember to keep your changes minimal and focused on the issue.
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m You are an expert software engineer. You have access to tools: read_file, run_tests, apply_patch, escalate.
+  [92m|[0m Always read the file before editing. Always run tests after editing.
+  [92m|[0m If tests fail, read the error carefully and fix it.
+  [92m|[0m Never delete tests. Never skip verification.
+  [92m|[0m When you are done, call escalate with a summary.
+  [92m|[0m Your current working directory is /home/user/project.
+  [92m|[0m The project uses Python 3.12, pytest, and ruff for linting.
+  [92m|[0m The test suite has 200+ tests across 15 modules.
+  [92m|[0m Remember to keep your changes minimal and focused on the issue.
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 2  |  [92mUSER[0m  |  content_type=user_goal  label=core
+  [2mtokens: 93 raw  ->  93 clean  (1.0x compression, 0 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m Fix the bug in src/auth.py where the JWT token validation fails silently
+  [91m[2m|[0m when the token has an expired 'exp' claim. The function should raise
+  [91m[2m|[0m a TokenExpiredError instead of returning True. This is causing security
+  [91m[2m|[0m issues in production because expired tokens are being accepted.
+  [91m[2m|[0m 
+  [91m[2m|[0m The affected function is validate_token() around line 42.
+  [91m[2m|[0m 
+  [91m[2m|[0m Related test file: tests/test_auth.py
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m Fix the bug in src/auth.py where the JWT token validation fails silently
+  [92m|[0m when the token has an expired 'exp' claim. The function should raise
+  [92m|[0m a TokenExpiredError instead of returning True. This is causing security
+  [92m|[0m issues in production because expired tokens are being accepted.
+  [92m|[0m 
+  [92m|[0m The affected function is validate_token() around line 42.
+  [92m|[0m 
+  [92m|[0m Related test file: tests/test_auth.py
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 3  |  [91mTOOL[0m  |  content_type=tool_result_file  label=compact
+  [2mtokens: 514 raw  ->  5 clean  (102.8x compression, 509 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m # src/auth.py
+  [91m[2m|[0m import jwt
+  [91m[2m|[0m import time
+  [91m[2m|[0m from datetime import datetime, timedelta
+  [91m[2m|[0m 
+  [91m[2m|[0m SECRET_KEY = "super-secret-key-do-not-share"
+  [91m[2m|[0m 
+  [91m[2m|[0m class TokenExpiredError(Exception):
+  [91m[2m|[0m     pass
+  [91m[2m|[0m 
+  [91m[2m|[0m class TokenInvalidError(Exception):
+  [91m[2m|[0m     pass
+  [91m[2m|[0m 
+  [91m[2m|[0m def create_token(user_id: int, expires_in: int = 3600) -> str:
+  [91m[2m|[0m     """Create a JWT token for a user."""
+  [91m[2m|[0m   ... (54 more lines omitted) ...
+  [91m[2m|  ... (54 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m src/auth.py (69 lines)
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 4  |  [91mTOOL[0m  |  content_type=tool_result_test  label=distill
+  [2mtokens: 759 raw  ->  93 clean  (8.2x compression, 666 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m $ cd /home/user/project && python -m pytest tests/test_auth.py -v
+  [91m[2m|[0m ============================= test session starts ==============================
+  [91m[2m|[0m platform linux -- Python 3.12.0, pytest-7.4.3, pluggy-1.3.0
+  [91m[2m|[0m rootdir: /home/user/project
+  [91m[2m|[0m plugins: cov-4.1.0, xdist-3.5.0
+  [91m[2m|[0m collected 12 items
+  [91m[2m|[0m 
+  [91m[2m|[0m tests/test_auth.py::test_create_token PASSED                             [  8%]
+  [91m[2m|[0m tests/test_auth.py::test_create_token_expiry PASSED                      [ 16%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_valid PASSED                     [ 25%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_expired FAILED                     [ 33%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_invalid FAILED                     [ 41%]
+  [91m[2m|[0m tests/test_auth.py::test_refresh_token PASSED                            [ 50%]
+  [91m[2m|[0m tests/test_auth.py::test_refresh_expired_token FAILED                      [ 58%]
+  [91m[2m|[0m tests/test_auth.py::test_revoke_token PASSED                             [ 66%]
+  [91m[2m|[0m   ... (45 more lines omitted) ...
+  [91m[2m|  ... (45 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m Test output: 60 lines
+  [92m|[0m FAILED tests/test_auth.py::test_validate_token_expired
+  [92m|[0m FAILED tests/test_auth.py::test_validate_token_invalid
+  [92m|[0m FAILED tests/test_auth.py::test_refresh_expired_token
+  [92m|[0m FAILED tests/test_auth.py::test_auth_middleware_expired
+  [92m|[0m with pytest.raises(TokenExpiredError):
+  [92m|[0m E           assert True == raises(TokenExpiredError)
+  [92m|[0m with pytest.raises(TokenInvalidError):
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 5  |  [93mASSISTANT[0m  |  content_type=reasoning  label=distill
+  [2mtokens: 351 raw  ->  110 clean  (3.2x compression, 241 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m Looking at the test failures, I can see the root cause. In validate_token(), 
+  [91m[2m|[0m when a jwt.ExpiredSignatureError is caught, the function returns True instead of raising TokenExpiredError. 
+  [91m[2m|[0m This is clearly the bug described in the issue.
+  [91m[2m|[0m 
+  [91m[2m|[0m The fix is straightforward: change `return True` to `raise TokenExpiredError("Token has expired")`.
+  [91m[2m|[0m 
+  [91m[2m|[0m But I also notice this has cascading effects:
+  [91m[2m|[0m 1. refresh_token() calls validate_token() and expects a dict, but gets True for expired tokens
+  [91m[2m|[0m 2. auth_middleware() checks `isinstance(payload, bool)` which is a workaround for the bug
+  [91m[2m|[0m 3. get_user_from_token() also has the same isinstance check
+  [91m[2m|[0m 
+  [91m[2m|[0m After fixing validate_token(), the isinstance checks in refresh_token(), auth_middleware(), 
+  [91m[2m|[0m and get_user_from_token() become unnecessary. However, I should keep them as defensive coding 
+  [91m[2m|[0m in case jwt.decode returns something unexpected.
+  [91m[2m|[0m 
+  [91m[2m|[0m   ... (10 more lines omitted) ...
+  [91m[2m|  ... (10 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m Decision:
+  [92m|[0m 1. refresh_token() calls validate_token() and expects a dict, but gets True for expired tokens
+  [92m|[0m 2. auth_middleware() checks `isinstance(payload, bool)` which is a workaround for the bug
+  [92m|[0m 3. get_user_from_token() also has the same isinstance check
+  [92m|[0m 1. Fix validate_token() to raise TokenExpiredError
+  [92m|[0m 2. Remove the isinstance checks in callers since they're dead code after the fix
+  [92m|[0m 3. Update auth_middleware to let the exception propagate
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 6  |  [91mTOOL[0m  |  content_type=agent_patch  label=distill
+  [2mtokens: 451 raw  ->  9 clean  (50.1x compression, 442 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m $ cd /home/user/project && git diff
+  [91m[2m|[0m diff --git a/src/auth.py b/src/auth.py
+  [91m[2m|[0m index 3a4f5b2..7c8d9e1 100644
+  [91m[2m|[0m --- a/src/auth.py
+  [91m[2m|[0m +++ b/src/auth.py
+  [91m[2m|[0m @@ -28,8 +28,7 @@ def validate_token(token: str) -> dict:
+  [91m[2m|[0m          payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+  [91m[2m|[0m          return payload
+  [91m[2m|[0m      except jwt.ExpiredSignatureError:
+  [91m[2m|[0m -        # BUG: This should raise TokenExpiredError but instead returns True
+  [91m[2m|[0m -        return True
+  [91m[2m|[0m +        raise TokenExpiredError("Token has expired")
+  [91m[2m|[0m      except jwt.InvalidTokenError as e:
+  [91m[2m|[0m          raise TokenInvalidError(f"Invalid token: {e}")
+  [91m[2m|[0m  
+  [91m[2m|[0m   ... (35 more lines omitted) ...
+  [91m[2m|  ... (35 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m Edited 1 file(s): +2/-9
+  [92m|[0m   src/auth.py
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 7  |  [91mTOOL[0m  |  content_type=tool_result_test  label=distill
+  [2mtokens: 334 raw  ->  20 clean  (16.7x compression, 314 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m $ cd /home/user/project && python -m pytest tests/test_auth.py -v
+  [91m[2m|[0m ============================= test session starts ==============================
+  [91m[2m|[0m platform linux -- Python 3.12.0, pytest-7.4.3, pluggy-1.3.0
+  [91m[2m|[0m rootdir: /home/user/project
+  [91m[2m|[0m plugins: cov-4.1.0, xdist-3.5.0
+  [91m[2m|[0m collected 12 items
+  [91m[2m|[0m 
+  [91m[2m|[0m tests/test_auth.py::test_create_token PASSED                             [  8%]
+  [91m[2m|[0m tests/test_auth.py::test_create_token_expiry PASSED                      [ 16%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_valid PASSED                     [ 25%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_expired PASSED                     [ 33%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_invalid PASSED                     [ 41%]
+  [91m[2m|[0m tests/test_auth.py::test_refresh_token PASSED                            [ 50%]
+  [91m[2m|[0m tests/test_auth.py::test_refresh_expired_token PASSED                    [ 58%]
+  [91m[2m|[0m tests/test_auth.py::test_revoke_token PASSED                             [ 66%]
+  [91m[2m|[0m   ... (7 more lines omitted) ...
+  [91m[2m|  ... (7 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m ============================== 12 passed in 1.15s ==============================
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 8  |  [91mTOOL[0m  |  content_type=tool_result_file  label=compact
+  [2mtokens: 591 raw  ->  7 clean  (84.4x compression, 584 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m # tests/test_auth.py
+  [91m[2m|[0m import pytest
+  [91m[2m|[0m from src.auth import (
+  [91m[2m|[0m     create_token, validate_token, refresh_token, revoke_token,
+  [91m[2m|[0m     auth_middleware, get_user_from_token, is_token_valid,
+  [91m[2m|[0m     TokenExpiredError, TokenInvalidError,
+  [91m[2m|[0m )
+  [91m[2m|[0m from unittest.mock import MagicMock
+  [91m[2m|[0m 
+  [91m[2m|[0m class MockRequest:
+  [91m[2m|[0m     def __init__(self, headers=None):
+  [91m[2m|[0m         self.headers = headers or {}
+  [91m[2m|[0m         self.user = None
+  [91m[2m|[0m 
+  [91m[2m|[0m def test_create_token():
+  [91m[2m|[0m   ... (67 more lines omitted) ...
+  [91m[2m|  ... (67 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m tests/test_auth.py (82 lines)
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 9  |  [91mTOOL[0m  |  content_type=tool_result_test  label=distill
+  [2mtokens: 585 raw  ->  20 clean  (29.2x compression, 565 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m $ cd /home/user/project && python -m pytest tests/ -v --tb=short
+  [91m[2m|[0m ============================= test session starts ==============================
+  [91m[2m|[0m platform linux -- Python 3.12.0, pytest-7.4.3, pluggy-1.3.0
+  [91m[2m|[0m rootdir: /home/user/project
+  [91m[2m|[0m plugins: cov-4.1.0, xdist-3.5.0
+  [91m[2m|[0m collected 213 items
+  [91m[2m|[0m 
+  [91m[2m|[0m tests/test_api.py::test_health PASSED                                      [  0%]
+  [91m[2m|[0m tests/test_api.py::test_version PASSED                                     [  0%]
+  [91m[2m|[0m tests/test_api.py::test_root PASSED                                        [  1%]
+  [91m[2m|[0m tests/test_auth.py::test_create_token PASSED                             [  2%]
+  [91m[2m|[0m tests/test_auth.py::test_create_token_expiry PASSED                      [  2%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_valid PASSED                     [  3%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_expired PASSED                     [  3%]
+  [91m[2m|[0m tests/test_auth.py::test_validate_token_invalid PASSED                     [  4%]
+  [91m[2m|[0m   ... (20 more lines omitted) ...
+  [91m[2m|  ... (20 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m ============================== 213 passed in 4.72s ==============================
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m  TURN 10  |  [93mASSISTANT[0m  |  content_type=reasoning  label=distill
+  [2mtokens: 247 raw  ->  146 clean  (1.7x compression, 101 tokens saved)[0m
+
+  [91m[1m--- RAW (what LLM sees today) ---[0m
+  [91m[2m|[0m ## Summary
+  [91m[2m|[0m 
+  [91m[2m|[0m Fixed the JWT token validation bug in src/auth.py. The validate_token() function 
+  [91m[2m|[0m was returning True for expired tokens instead of raising TokenExpiredError.
+  [91m[2m|[0m 
+  [91m[2m|[0m ### Changes:
+  [91m[2m|[0m 1. **src/auth.py line 30**: Changed `return True` to `raise TokenExpiredError("Token has expired")`
+  [91m[2m|[0m 2. **src/auth.py line 38**: Removed dead `isinstance(payload, bool)` check in refresh_token()
+  [91m[2m|[0m 3. **src/auth.py line 48**: Removed dead isinstance check in auth_middleware()
+  [91m[2m|[0m 4. **src/auth.py line 57**: Removed dead isinstance check in get_user_from_token()
+  [91m[2m|[0m 5. **src/auth.py line 63**: Simplified is_token_valid() to return True on success
+  [91m[2m|[0m 
+  [91m[2m|[0m ### Verification:
+  [91m[2m|[0m - All 12 auth tests pass (previously 4 failed)
+  [91m[2m|[0m - Full suite: 213 passed in 4.72s, no regressions
+  [91m[2m|[0m   ... (5 more lines omitted) ...
+  [91m[2m|  ... (5 more lines)[0m
+
+  [92m[1m--- CLEAN (after context firewall) ---[0m
+  [92m|[0m Decision:
+  [92m|[0m ## Summary
+  [92m|[0m ### Changes:
+  [92m|[0m 1. **src/auth.py line 30**: Changed `return True` to `raise TokenExpiredError("Token has expired")`
+  [92m|[0m 2. **src/auth.py line 38**: Removed dead `isinstance(payload, bool)` check in refresh_token()
+  [92m|[0m 3. **src/auth.py line 48**: Removed dead isinstance check in auth_middleware()
+  [92m|[0m 4. **src/auth.py line 57**: Removed dead isinstance check in get_user_from_token()
+  [92m|[0m 5. **src/auth.py line 63**: Simplified is_token_valid() to return True on success
+  [92m|[0m ### Verification:
+  [92m|[0m - All 12 auth tests pass (previously 4 failed)
+  [92m|[0m - Full suite: 213 passed in 4.72s, no regressions
+[2m----------------------------------------------------------------------------------------------------[0m
+
+[1m====================================================================================================
+  SESSION TOTALS
+====================================================================================================[0m
+
+  [91mRaw context (today):         4,062 tokens[0m
+  [92mClean context (firewall):      640 tokens[0m
+  [1mCompression ratio:            6.3x[0m
+  [1mTokens saved:                3,422 tokens[0m
+
+  [2mAt ~$0.01/1K tokens (GPT-4 class), this session costs:[0m
+    Raw:   $0.04
+    Clean: $0.01
+    Saved: $0.03 (84%)
+
+[1m====================================================================================================
+  THE ACTUAL CONTEXT WINDOW (what the LLM sees with the firewall)
+====================================================================================================[0m
+
+  [96m[system][0m You are an expert software engineer. You have access to tools: read_file, run_tests, apply_patch, escalate.
+Always read the file before editing. Always run tests after editing.
+If tests fail, read the error carefully and fix it.
+Never delete tests. Never skip verification.
+When you are done, call escalate with a summary.
+Your current working directory is /home/user/project.
+The project uses Python 3.12, pytest, and ruff for linting.
+The test suite has 200+ tests across 15 modules.
+Remember to keep your changes minimal and focused on the issue.
+
+  [92m[user][0m Fix the bug in src/auth.py where the JWT token validation fails silently
+when the token has an expired 'exp' claim. The function should raise
+a TokenExpiredError instead of returning True. This is causing security
+issues in production because expired tokens are being accepted.
+
+The affected function is validate_token() around line 42.
+
+Related test file: tests/test_auth.py
+
+  [91m[tool][0m src/auth.py (69 lines)
+
+  [91m[tool][0m Test output: 60 lines
+FAILED tests/test_auth.py::test_validate_token_expired
+FAILED tests/test_auth.py::test_validate_token_invalid
+FAILED tests/test_auth.py::test_refresh_expired_token
+FAILED tests/test_auth.py::test_auth_middleware_expired
+with pytest.raises(TokenExpiredError):
+E           assert True == raises(TokenExpiredError)
+with pytest.raises(TokenInvalidError):
+
+  [93m[assistant][0m Decision:
+1. refresh_token() calls validate_token() and expects a dict, but gets True for expired tokens
+2. auth_middleware() checks `isinstance(payload, bool)` which is a workaround for the bug
+3. get_user_from_token() also has the same isinstance check
+1. Fix validate_token() to raise TokenExpiredError
+2. Remove the isinstance checks in callers since they're dead code after the fix
+3. Update auth_middleware to let the exception propagate
+
+  [91m[tool][0m Edited 1 file(s): +2/-9
+  src/auth.py
+
+  [91m[tool][0m ============================== 12 passed in 1.15s ==============================
+
+  [91m[tool][0m tests/test_auth.py (82 lines)
+
+  [91m[tool][0m ============================== 213 passed in 4.72s ==============================
+
+  [93m[assistant][0m Decision:
+## Summary
+### Changes:
+1. **src/auth.py line 30**: Changed `return True` to `raise TokenExpiredError("Token has expired")`
+2. **src/auth.py line 38**: Removed dead `isinstance(payload, bool)` check in refresh_token()
+3. **src/auth.py line 48**: Removed dead isinstance check in auth_middleware()
+4. **src/auth.py line 57**: Removed dead isinstance check in get_user_from_token()
+5. **src/auth.py line 63**: Simplified is_token_valid() to return True on success
+### Verification:
+- All 12 auth tests pass (previously 4 failed)
+- Full suite: 213 passed in 4.72s, no regressions
+
+[2m====================================================================================================[0m
+  [2mTotal: 640 tokens. The LLM sees only this -- no noise, no bloat, no pollution.[0m
+

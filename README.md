@@ -1,16 +1,101 @@
 # Honey-Comb
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-22c55e?style=flat-square" alt="version"/>
+  <img src="https://img.shields.io/badge/version-0.2.0-22c55e?style=flat-square" alt="version"/>
   <img src="https://img.shields.io/badge/accuracy-94.5%25-22c55e?style=flat-square" alt="accuracy"/>
   <img src="https://img.shields.io/badge/training-1335%20examples-8b5cf6?style=flat-square" alt="training"/>
   <img src="https://img.shields.io/badge/tests-129%20passed-3b82f6?style=flat-square" alt="tests"/>
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license"/>
 </p>
 
-**Keep the honey, drop the wax.**
 
-CPU-only inline context compression for agent harnesses.
+<p align="center">
+  <b>v0.2.0 - Production Ready</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-production%20ready-success?style=flat-square" alt="status"/>
+  <img src="https://img.shields.io/badge/thread%20safe-yes-success?style=flat-square" alt="thread-safe"/>
+  <img src="https://img.shields.io/badge/observability-metrics%20%2B%20health-success?style=flat-square" alt="observability"/>
+</p>
+
+
+<p align="center">
+  <b>Keep the honey, drop the wax.</b>
+</p>
+
+<p align="center">
+  <i>CPU-only inline context compression for agent harnesses</i>
+</p>
+
+---
+
+## Visual Gallery
+
+### Architecture Overview
+
+<p align="center">
+  <img src="docs/images/architecture.png" alt="Honey-Comb Architecture" width="800"/>
+</p>
+
+Honey-Comb operates in two loops:
+- **Hot Loop** (per message, ~0.035ms rules / ~0.8ms ML): Classifies and compresses every message on ingestion
+- **Cool Loop** (every N turns, ~10-50ms): Performs staleness detection and budget enforcement
+
+### Performance Benchmarks
+
+<p align="center">
+  <img src="docs/images/performance_comparison.png" alt="Performance Comparison" width="800"/>
+</p>
+
+Honey-Comb achieves exceptional throughput across different modes:
+- **Production mode** (thread-safe, metrics enabled): 17,069 msg/s
+- **High-performance mode** (no locks, no metrics): 24,667 msg/s
+- **Rule-based classification**: 28,948 msg/s
+
+### Compression Ratios
+
+<p align="center">
+  <img src="docs/images/compression_ratios.png" alt="Compression Ratios" width="800"/>
+</p>
+
+Real-world compression examples from agent sessions:
+- **Test output**: 500 lines → "94 passed, 2 failed" + failure details (83x compression)
+- **File contents**: 69-line source file → "src/auth.py (69 lines)" (103x compression)
+- **Reasoning traces**: Verbose reasoning → key conclusions (3-5x compression)
+
+### Latency Breakdown
+
+<p align="center">
+  <img src="docs/images/latency_breakdown.png" alt="Latency Breakdown" width="800"/>
+</p>
+
+The hot loop completes in under 1.5ms per message, making inline compression practical for real-time agent loops.
+
+### Real-World Demo
+
+The demo shows a 10-turn coding agent session compressed from **4,062 tokens to 640 tokens** (6.3x compression):
+
+```
+Turn 1 (SYSTEM)   - 137 → 137 tokens (CORE - kept verbatim)
+Turn 2 (USER)     - 93 → 93 tokens (CORE - kept verbatim)
+Turn 3 (FILE)     - 514 → 5 tokens (COMPACT - 103x compression)
+Turn 4 (TESTS)    - 759 → 93 tokens (DISTILL - 8x compression)
+Turn 5 (REASON)   - 351 → 110 tokens (DISTILL - 3x compression)
+Turn 6 (DIFF)     - 451 → 9 tokens (COMPACT - 50x compression)
+Turn 7 (TESTS)    - 334 → 20 tokens (DISTILL - 17x compression)
+Turn 8 (TESTS)    - 585 → 20 tokens (DISTILL - 29x compression)
+Turn 9 (SUMMARY)  - 247 → 146 tokens (DISTILL - 2x compression)
+─────────────────────────────────────────────────────
+Total: 4,062 → 640 tokens (6.3x compression, 84% reduction)
+```
+
+Run the demo yourself:
+```bash
+python scripts/demo_pollution.py
+```
+
+---
 
 ## What It Does
 
