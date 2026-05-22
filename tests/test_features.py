@@ -1,6 +1,6 @@
 """Tests for feature extraction."""
 
-from context_firewall.features import extract_features, extract_text_features, features_to_text
+from honeycomb.features import extract_features, extract_text_features, features_to_text
 
 
 def test_extract_text_features_detects_code_blocks():

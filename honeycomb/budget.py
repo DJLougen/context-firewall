@@ -13,11 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from context_firewall.compressor import compress
-from context_firewall.labels import Label
+from honeycomb.compressor import compress
+from honeycomb.labels import Label
 
 if TYPE_CHECKING:
-    from context_firewall.session import ContextEntry, SessionState
+    from honeycomb.session import ContextEntry, SessionState
 
 
 # Downgrade chain: when under pressure, labels get more aggressive

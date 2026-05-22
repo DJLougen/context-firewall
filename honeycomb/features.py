@@ -6,7 +6,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_firewall.session import SessionState
+    from honeycomb.session import SessionState
 
 
 # Max content size to analyze for features (10KB)

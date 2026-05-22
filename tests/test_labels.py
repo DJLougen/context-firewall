@@ -1,6 +1,6 @@
 """Tests for label taxonomy and content types."""
 
-from context_firewall.labels import ContentType, Label
+from honeycomb.labels import ContentType, Label
 
 
 def test_label_priority_ordering():

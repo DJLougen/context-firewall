@@ -9,12 +9,12 @@ from pathlib import Path
 import numpy as np
 from scipy import stats
 
-from context_firewall.firewall import ContextFirewall, Message
+from honeycomb.firewall import HoneyComb, Message
 
 
 def run_trial_hot_loop(num_messages: int = 1000) -> float:
     """Run one trial and return per-message latency in ms."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     messages = [
         Message(role="system", content="You are a helpful coding assistant."),
         Message(role="user", content="Fix the bug in src/foo.py"),
@@ -40,7 +40,7 @@ def run_trial_ml_classifier(num_messages: int = 1000, model_path: Path | None = 
     if model_path is None:
         model_path = Path("models/context_firewall.joblib")
     
-    fw = ContextFirewall(model_path=model_path)
+    fw = HoneyComb(model_path=model_path)
     messages = [
         Message(role="system", content="You are a helpful coding assistant."),
         Message(role="user", content="Fix the bug in src/foo.py"),
@@ -59,7 +59,7 @@ def run_trial_ml_classifier(num_messages: int = 1000, model_path: Path | None = 
 
 def run_trial_compression() -> dict:
     """Run one compression trial and return stats."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     fw.process(Message(role="system", content="You are a helpful coding assistant."))
     fw.process(Message(role="user", content="Fix the bug in src/foo.py where bar() returns None."))
@@ -114,8 +114,8 @@ def compute_stats(values: np.ndarray, name: str) -> dict:
 
 def benchmark_accuracy_significance():
     """Test if classification accuracy is significantly better than chance."""
-    from context_firewall.classifier import RuleBasedClassifier
-    from context_firewall.labels import Label
+    from honeycomb.classifier import RuleBasedClassifier
+    from honeycomb.labels import Label
     import json
     
     # Load eval data

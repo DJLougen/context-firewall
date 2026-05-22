@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "context-firewall"
+name = "honey-comb"
 version = "0.1.0"
-description = "CPU-only inline context compression for agent harnesses"
+description = "CPU-only inline context compression for agent harnesses — keep the honey, drop the wax"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -23,12 +23,11 @@ dev = [
 ]
 
 [project.scripts]
-cf-train = "context_firewall.cli_train:main"
+honeycomb-train = "honeycomb.cli_train:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["context_firewall*"]
-
+include = ["honeycomb*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

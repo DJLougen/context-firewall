@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from context_firewall.classifier import build_classifier, evaluate, predict, train
-from context_firewall.io import make_row, write_jsonl
-from context_firewall.labels import ContentType, Label
+from honeycomb.classifier import build_classifier, evaluate, predict, train
+from honeycomb.io import make_row, write_jsonl
+from honeycomb.labels import ContentType, Label
 
 
 def test_build_classifier():
@@ -133,7 +133,7 @@ def test_predict_single(tmp_path: Path):
 
 def test_firewall_with_ml_classifier(tmp_path: Path):
     """Firewall should work with ML classifier loaded."""
-    from context_firewall.firewall import ContextFirewall, Message
+    from honeycomb.firewall import HoneyComb, Message
     
     # Generate data and train
     rows = []
@@ -158,7 +158,7 @@ def test_firewall_with_ml_classifier(tmp_path: Path):
     train(train_path, output_path=model_path)
     
     # Create firewall with ML classifier
-    fw = ContextFirewall(model_path=model_path)
+    fw = HoneyComb(model_path=model_path)
     
     # Process a message
     result = fw.process(Message(role="system", content="You are a helpful assistant."))

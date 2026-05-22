@@ -1,7 +1,7 @@
 """Tests for session state tracking."""
 
-from context_firewall.labels import ContentType, Label
-from context_firewall.session import SessionState, _estimate_tokens, _extract_file_paths
+from honeycomb.labels import ContentType, Label
+from honeycomb.session import SessionState, _estimate_tokens, _extract_file_paths
 
 
 def test_session_tracks_turn_count():

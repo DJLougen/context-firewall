@@ -3,15 +3,15 @@
 import json
 from pathlib import Path
 
-from context_firewall.budget import BudgetConfig
-from context_firewall.firewall import (
+from honeycomb.budget import BudgetConfig
+from honeycomb.firewall import (
     CompressedMessage,
-    ContextFirewall,
+    HoneyComb,
     Message,
     _infer_content_type,
 )
-from context_firewall.io import load_training_data, make_row, read_jsonl, write_jsonl
-from context_firewall.labels import ContentType, Label
+from honeycomb.io import load_training_data, make_row, read_jsonl, write_jsonl
+from honeycomb.labels import ContentType, Label
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ def test_infer_agent_patch():
 
 def test_process_system_message():
     """System messages should be kept as CORE."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="system", content="You are a helpful assistant."))
     
     assert result.label == Label.CORE
@@ -70,7 +70,7 @@ def test_process_system_message():
 
 def test_process_user_goal():
     """User goals should be kept as CORE."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="user", content="Fix the bug in foo.py"))
     
     assert result.label == Label.CORE
@@ -80,7 +80,7 @@ def test_process_user_goal():
 
 def test_process_test_output():
     """Test output should be DISTILLed."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(
         role="tool",
         content="94 passed, 2 failed in 3.5s\nlots of other output\nmore output",
@@ -94,7 +94,7 @@ def test_process_test_output():
 
 def test_process_file_content():
     """File content should be COMPACTed or DISTILLed."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Small file → DISTILL
     result = fw.process(Message(
@@ -107,7 +107,7 @@ def test_process_file_content():
 
 def test_process_error_trace():
     """Error traces should be DISTILLed."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(
         role="tool",
         content='Traceback (most recent call last):\n  File "foo.py", line 42\nValueError: bad input',
@@ -119,7 +119,7 @@ def test_process_error_trace():
 
 def test_process_returns_compressed_message():
     """Process should return a CompressedMessage with all fields."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="user", content="Fix the bug"))
     
     assert isinstance(result, CompressedMessage)
@@ -136,7 +136,7 @@ def test_process_returns_compressed_message():
 
 def test_cool_loop_drops_stale_file_reads():
     """Cool loop should drop stale file reads."""
-    fw = ContextFirewall(cool_interval=2)
+    fw = HoneyComb(cool_interval=2)
     
     # Turn 1: read foo.py
     fw.process(Message(
@@ -158,7 +158,7 @@ def test_cool_loop_drops_stale_file_reads():
 
 def test_cool_loop_enforces_budget():
     """Cool loop should enforce budget when over."""
-    fw = ContextFirewall(
+    fw = HoneyComb(
         budget_config=BudgetConfig(target_tokens=20),
         cool_interval=2,
     )
@@ -182,7 +182,7 @@ def test_cool_loop_enforces_budget():
 
 def test_get_context_window():
     """Should return compressed context as message dicts."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     fw.process(Message(role="system", content="You are helpful."))
     fw.process(Message(role="user", content="Fix the bug."))
@@ -195,7 +195,7 @@ def test_get_context_window():
 
 def test_get_context_window_excludes_dropped():
     """Context window should exclude dropped entries."""
-    fw = ContextFirewall(cool_interval=2)
+    fw = HoneyComb(cool_interval=2)
     
     # Turn 1: read foo.py
     fw.process(Message(
@@ -221,7 +221,7 @@ def test_get_context_window_excludes_dropped():
 
 def test_get_stats():
     """Should return session statistics."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     fw.process(Message(role="system", content="You are helpful."))
     fw.process(Message(role="user", content="Fix the bug in foo.py"))
@@ -279,7 +279,7 @@ def test_load_training_data(tmp_path: Path):
 
 def test_full_session_simulation():
     """Simulate a full agent session and verify compression."""
-    fw = ContextFirewall(cool_interval=3)
+    fw = HoneyComb(cool_interval=3)
     
     # Turn 1: System prompt
     r1 = fw.process(Message(role="system", content="You are a coding assistant."))

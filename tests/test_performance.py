@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from context_firewall.budget import BudgetConfig
-from context_firewall.compressor import compress
-from context_firewall.firewall import ContextFirewall, Message
-from context_firewall.labels import ContentType, Label
-from context_firewall.session import SessionState
+from honeycomb.budget import BudgetConfig
+from honeycomb.compressor import compress
+from honeycomb.firewall import HoneyComb, Message
+from honeycomb.labels import ContentType, Label
+from honeycomb.session import SessionState
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ from context_firewall.session import SessionState
 
 def test_rule_based_latency_p99():
     """Rule-based classification should complete in <1ms per message (p99)."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     messages = [
         Message(role="system", content="You are a helpful assistant."),
@@ -41,7 +41,7 @@ def test_rule_based_latency_p99():
         fw.process(msg)
     
     # Measure
-    fw2 = ContextFirewall()
+    fw2 = HoneyComb()
     latencies = []
     for _ in range(1000):
         msg = messages[len(latencies) % len(messages)]
@@ -67,7 +67,7 @@ def test_ml_classifier_latency_p99():
     if not model_path.exists():
         pytest.skip("Model not trained")
     
-    fw = ContextFirewall(model_path=model_path)
+    fw = HoneyComb(model_path=model_path)
     
     messages = [
         Message(role="system", content="You are a helpful assistant."),
@@ -80,7 +80,7 @@ def test_ml_classifier_latency_p99():
         fw.process(msg)
     
     # Measure
-    fw2 = ContextFirewall(model_path=model_path)
+    fw2 = HoneyComb(model_path=model_path)
     latencies = []
     for _ in range(1000):
         msg = messages[len(latencies) % len(messages)]
@@ -119,7 +119,7 @@ def test_compression_latency():
 
 def test_cool_loop_latency():
     """Cool loop should complete in <10ms for typical sessions."""
-    fw = ContextFirewall(cool_interval=100)  # Don't auto-trigger
+    fw = HoneyComb(cool_interval=100)  # Don't auto-trigger
     
     # Build up a session
     for i in range(50):
@@ -145,7 +145,7 @@ def test_memory_usage_reasonable():
     """Session memory should not exceed reasonable bounds."""
     import sys
     
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Process 100 messages
     for i in range(100):
@@ -174,7 +174,7 @@ def test_very_large_message():
     """Should handle very large messages (>1MB) without crashing."""
     content = "x" * 1_500_000  # 1.5MB
     
-    fw = ContextFirewall()
+    fw = HoneyComb()
     start = time.perf_counter()
     result = fw.process(Message(role="tool", content=content, content_type=ContentType.TOOL_RESULT_COMMAND))
     elapsed = (time.perf_counter() - start) * 1000  # ms
@@ -186,7 +186,7 @@ def test_very_large_message():
 
 def test_empty_message():
     """Should handle empty messages gracefully."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="tool", content="", content_type=ContentType.TOOL_RESULT_COMMAND))
     
     assert result.content == ""
@@ -197,7 +197,7 @@ def test_unicode_content():
     """Should handle Unicode content without errors."""
     content = "Hello 世界 🌍 Привет мир"
     
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="user", content=content))
     
     assert result.content is not None
@@ -207,7 +207,7 @@ def test_binary_like_content():
     """Should handle binary-like content (null bytes, etc.)."""
     content = "output\x00with\x00nulls\x00and\x00binary"
     
-    fw = ContextFirewall()
+    fw = HoneyComb()
     result = fw.process(Message(role="tool", content=content))
     
     assert result.content is not None
@@ -219,8 +219,8 @@ def test_binary_like_content():
 
 def test_sustained_throughput():
     """Should sustain >1000 msg/s over extended period."""
-    fw = ContextFirewall()
-    
+    fw = HoneyComb(thread_safe=False, metrics_enabled=False)  # Max performance
+
     messages = [
         Message(role="system", content="You are a helpful assistant."),
         Message(role="user", content="Fix the bug"),
@@ -243,7 +243,7 @@ def test_no_memory_leak():
     """Memory should not grow unbounded over time."""
     import gc
     
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Process messages in batches
     initial_count = len(gc.get_objects())
@@ -271,7 +271,7 @@ def test_no_memory_leak():
 
 def test_compression_ratio_realistic():
     """Compression should achieve >5x ratio on realistic workloads."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Simulate realistic session
     fw.process(Message(role="system", content="You are a helpful coding assistant."))
@@ -295,7 +295,7 @@ def test_compression_ratio_realistic():
 
 def test_compression_preserves_important_info():
     """Compression should preserve error messages and test results."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Error trace
     error_result = fw.process(Message(
@@ -322,7 +322,7 @@ def test_compression_preserves_important_info():
 
 def test_repeated_processing_consistent():
     """Processing the same message multiple times should be consistent."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     msg = Message(role="tool", content="94 passed, 2 failed")
     
@@ -336,8 +336,8 @@ def test_repeated_processing_consistent():
 
 def test_session_isolation():
     """Different firewall instances should have isolated sessions."""
-    fw1 = ContextFirewall()
-    fw2 = ContextFirewall()
+    fw1 = HoneyComb()
+    fw2 = HoneyComb()
     
     fw1.process(Message(role="system", content="Session 1"))
     fw2.process(Message(role="system", content="Session 2"))

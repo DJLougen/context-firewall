@@ -1,6 +1,8 @@
-"""Context Firewall: main orchestrator for inline context compression.
+"""Honey-Comb: main orchestrator for inline context compression.
 
-The firewall processes every message through two loops:
+Keep the honey, drop the wax.
+
+The comb processes every message through two loops:
 
 HOT LOOP (per message, ~1-5ms):
   raw message → classify → compress → record in session
@@ -12,6 +14,7 @@ COOL LOOP (every N turns, ~10-50ms):
 Both loops are CPU-only. The LLM only sees clean, compressed context.
 """
 
+
 from __future__ import annotations
 
 import re
@@ -19,11 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from context_firewall.budget import BudgetConfig, BudgetManager
-from context_firewall.compressor import compress
-from context_firewall.features import extract_features, features_to_text
-from context_firewall.labels import ContentType, Label
-from context_firewall.session import SessionState, _extract_file_paths
+from honeycomb.budget import BudgetConfig, BudgetManager
+from honeycomb.compressor import compress
+from honeycomb.features import extract_features, features_to_text
+from honeycomb.labels import ContentType, Label
+from honeycomb.observability import metrics, timer, health_checker
+from honeycomb.session import SessionState, _extract_file_paths
 
 
 # ---------------------------------------------------------------------------
@@ -237,46 +241,53 @@ class MLClassifier:
 
 
 # ---------------------------------------------------------------------------
-# Context Firewall
+# Honey-Comb
 # ---------------------------------------------------------------------------
 
-class ContextFirewall:
+class HoneyComb:
     """Main entry point for inline context compression.
-    
+
     Usage:
-        firewall = ContextFirewall()
-        
+        comb = HoneyComb()
+
         for message in agent_messages:
-            compressed = firewall.process(message)
+            compressed = comb.process(message)
             # Send compressed.content to LLM
-    
-    The firewall maintains session state across calls. Create a new
+
+    The comb maintains session state across calls. Create a new
     instance for each agent session.
     """
-    
+
     def __init__(
         self,
         model_path: str | Path | None = None,
         budget_config: BudgetConfig | None = None,
         cool_interval: int = 5,
+        thread_safe: bool = True,
+        metrics_enabled: bool = True,
     ) -> None:
         """Initialize the firewall.
-        
+
         Args:
             model_path: Path to a trained classifier model. If None, uses
                        rule-based classification.
             budget_config: Token budget configuration. If None, uses defaults.
             cool_interval: Run cool loop every N turns (default 5).
+            thread_safe: Enable thread-safe operations (default True). Set to False
+                        for single-threaded use to improve performance.
+            metrics_enabled: Enable metrics recording (default True). Set to False
+                           for maximum performance.
         """
-        self.session = SessionState()
+        self.session = SessionState(thread_safe=thread_safe)
         self.budget = BudgetManager(budget_config)
         self.cool_interval = cool_interval
-        
+        self._metrics_enabled = metrics_enabled
+
         # Load ML classifier if provided
         self._classifier: MLClassifier | None = None
         if model_path is not None:
             try:
-                from context_firewall.classifier import _load_model
+                from honeycomb.classifier import _load_model
                 pipeline, _ = _load_model(model_path)
                 self._classifier = MLClassifier(pipeline)
             except Exception as e:
@@ -296,50 +307,79 @@ class ContextFirewall:
         
         Returns the compressed message (what the LLM should see).
         """
-        # Advance turn
-        self.session.advance_turn()
-        
-        # Infer content type if not provided
-        content_type = message.content_type or _infer_content_type(message)
-        
-        # Extract file paths once (optimization)
-        file_paths = _extract_file_paths(message.content)
-        
-        # Extract features (pass file_paths to avoid re-extraction)
-        features = extract_features(message.content, message.role, self.session, file_paths)
-        features_text = features_to_text(features)
-        
-        # Classify (hot loop: ~1-3ms)
-        if self._classifier is not None:
-            label = self._classifier.predict(features_text)
+        if self._metrics_enabled:
+            with timer("processing"):
+                return self._process_impl(message)
         else:
-            label = _classify_rules(message, content_type, self.session)
-        
-        # Compress (deterministic, ~0.1ms)
-        compressed_content = compress(message.content, content_type, label)
-        
-        # Record in session (pass file_paths to avoid re-extraction)
-        entry = self.session.record(
-            role=message.role,
-            content_type=content_type,
-            label=label,
-            original=message.content,
-            compressed=compressed_content,
-            file_paths=file_paths,
-        )
-        
-        # Cool loop: periodic staleness pass
-        if self.session.turn_count % self.cool_interval == 0:
-            self._cool_pass()
-        
-        return CompressedMessage(
-            role=message.role,
-            content=compressed_content,
-            label=label,
-            content_type=content_type,
-            original_tokens=entry.original_tokens,
-            compressed_tokens=entry.compressed_tokens,
-        )
+            return self._process_impl(message)
+
+    def _process_impl(self, message: Message) -> CompressedMessage:
+        """Internal implementation of process()."""
+        try:
+            # Advance turn
+            self.session.advance_turn()
+
+            # Infer content type if not provided
+            content_type = message.content_type or _infer_content_type(message)
+
+            # Extract file paths once (optimization)
+            file_paths = _extract_file_paths(message.content)
+
+            # Extract features (pass file_paths to avoid re-extraction)
+            features = extract_features(message.content, message.role, self.session, file_paths)
+            features_text = features_to_text(features)
+
+            # Classify (hot loop: ~1-3ms)
+            if self._classifier is not None:
+                label = self._classifier.predict(features_text)
+            else:
+                label = _classify_rules(message, content_type, self.session)
+
+            # Compress (deterministic, ~0.1ms)
+            compressed_content = compress(message.content, content_type, label)
+
+            # Record in session (pass file_paths to avoid re-extraction)
+            entry = self.session.record(
+                role=message.role,
+                content_type=content_type,
+                label=label,
+                original=message.content,
+                compressed=compressed_content,
+                file_paths=file_paths,
+            )
+
+            # Cool loop: periodic staleness pass
+            if self.session.turn_count % self.cool_interval == 0:
+                self._cool_pass()
+
+            # Record metrics
+            if self._metrics_enabled:
+                compression_ratio = entry.original_tokens / max(entry.compressed_tokens, 1)
+                metrics.record_message(
+                    label=label.value,
+                    compression_ratio=compression_ratio,
+                )
+
+                # Update session state gauges
+                active = len(self.session.get_active_entries())
+                tokens = self.session.get_total_tokens()
+                metrics.update_session_state(
+                    active=active,
+                    tokens=tokens,
+                    turns=self.session.turn_count,
+                )
+
+            return CompressedMessage(
+                role=message.role,
+                content=compressed_content,
+                label=label,
+                content_type=content_type,
+                original_tokens=entry.original_tokens,
+                compressed_tokens=entry.compressed_tokens,
+            )
+        except Exception as e:
+            metrics.record_error()
+            raise
     
     def _cool_pass(self) -> None:
         """Run the cool loop: staleness check + budget enforcement."""

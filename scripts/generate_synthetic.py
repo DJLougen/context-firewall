@@ -8,8 +8,8 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from context_firewall.io import make_row, write_jsonl
-from context_firewall.labels import ContentType, Label
+from honeycomb.io import make_row, write_jsonl
+from honeycomb.labels import ContentType, Label
 
 
 # ---------------------------------------------------------------------------

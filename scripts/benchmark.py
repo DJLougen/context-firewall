@@ -5,13 +5,13 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from context_firewall.firewall import ContextFirewall, Message
-from context_firewall.labels import ContentType
+from honeycomb.firewall import HoneyComb, Message
+from honeycomb.labels import ContentType
 
 
 def benchmark_hot_loop(num_messages: int = 1000) -> dict:
     """Benchmark the hot loop (per-message processing)."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     messages = [
         Message(role="system", content="You are a helpful coding assistant."),
@@ -29,7 +29,7 @@ def benchmark_hot_loop(num_messages: int = 1000) -> dict:
         fw.process(msg)
     
     # Benchmark
-    fw2 = ContextFirewall()
+    fw2 = HoneyComb()
     start = time.perf_counter()
     for i in range(num_messages):
         msg = messages[i % len(messages)]
@@ -52,7 +52,7 @@ def benchmark_ml_classifier(num_messages: int = 1000) -> dict:
     if not model_path.exists():
         return {"error": "Model not trained yet. Run: cf-train examples/train.jsonl"}
     
-    fw = ContextFirewall(model_path=model_path)
+    fw = HoneyComb(model_path=model_path)
     
     messages = [
         Message(role="system", content="You are a helpful coding assistant."),
@@ -66,7 +66,7 @@ def benchmark_ml_classifier(num_messages: int = 1000) -> dict:
         fw.process(msg)
     
     # Benchmark
-    fw2 = ContextFirewall(model_path=model_path)
+    fw2 = HoneyComb(model_path=model_path)
     start = time.perf_counter()
     for i in range(num_messages):
         msg = messages[i % len(messages)]
@@ -85,7 +85,7 @@ def benchmark_ml_classifier(num_messages: int = 1000) -> dict:
 
 def benchmark_compression_ratio() -> dict:
     """Benchmark compression ratio on a realistic session."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Simulate a 20-turn session
     fw.process(Message(role="system", content="You are a helpful coding assistant."))

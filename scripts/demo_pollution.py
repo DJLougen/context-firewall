@@ -9,9 +9,9 @@ This simulates a realistic 10-turn coding agent session and displays:
 
 from __future__ import annotations
 
-from context_firewall.firewall import ContextFirewall, Message
-from context_firewall.labels import Label
-from context_firewall.session import _estimate_tokens
+from honeycomb.firewall import HoneyComb, Message
+from honeycomb.labels import Label
+from honeycomb.session import _estimate_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +470,7 @@ def main():
     print()
     hr()
 
-    fw = ContextFirewall()
+    fw = HoneyComb()
 
     raw_tokens_total = 0
     clean_tokens_total = 0

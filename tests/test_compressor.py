@@ -1,6 +1,6 @@
 """Tests for deterministic compression rules."""
 
-from context_firewall.compressor import (
+from honeycomb.compressor import (
     compress,
     compress_command_output,
     compress_error_trace,
@@ -10,7 +10,7 @@ from context_firewall.compressor import (
     compress_test_output,
     compress_tool_call,
 )
-from context_firewall.labels import ContentType, Label
+from honeycomb.labels import ContentType, Label
 
 
 # ---------------------------------------------------------------------------

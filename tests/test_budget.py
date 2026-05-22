@@ -1,8 +1,8 @@
 """Tests for budget management."""
 
-from context_firewall.budget import BudgetConfig, BudgetManager
-from context_firewall.labels import ContentType, Label
-from context_firewall.session import SessionState
+from honeycomb.budget import BudgetConfig, BudgetManager
+from honeycomb.labels import ContentType, Label
+from honeycomb.session import SessionState
 
 
 def test_budget_config_defaults():

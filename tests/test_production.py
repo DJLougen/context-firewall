@@ -14,20 +14,20 @@ Covers:
 import warnings
 from pathlib import Path
 
-from context_firewall.compressor import (
+from honeycomb.compressor import (
     compress,
     compress_error_trace,
     compress_search_result,
     compress_tool_call,
 )
-from context_firewall.firewall import (
+from honeycomb.firewall import (
     CompressedMessage,
-    ContextFirewall,
+    HoneyComb,
     Message,
     _infer_content_type,
 )
-from context_firewall.labels import ContentType, Label
-from context_firewall.session import _estimate_tokens
+from honeycomb.labels import ContentType, Label
+from honeycomb.session import _estimate_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ def test_compress_search_result_matches_real_files():
 
 def test_get_context_window_filters_empty_entries():
     """Context window should not include empty (DROP'd) entries."""
-    fw = ContextFirewall()
+    fw = HoneyComb()
     
     # Process a tool call (will be DROP'd)
     fw.process(Message(
@@ -141,7 +141,7 @@ def test_model_loading_fallback(tmp_path: Path):
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        fw = ContextFirewall(model_path=corrupt_path)
+        fw = HoneyComb(model_path=corrupt_path)
         
         # Should have warned
         assert len(w) == 1
@@ -197,8 +197,8 @@ def test_compressed_message_repr():
 def test_model_versioning(tmp_path: Path):
     """Trained models should include version metadata."""
     import joblib
-    from context_firewall.classifier import _MODEL_VERSION, train
-    from context_firewall.io import make_row, write_jsonl
+    from honeycomb.classifier import _MODEL_VERSION, train
+    from honeycomb.io import make_row, write_jsonl
     
     # Generate minimal training data
     rows = []
@@ -233,7 +233,7 @@ def test_model_versioning(tmp_path: Path):
 def test_load_model_legacy_format(tmp_path: Path):
     """Should handle legacy (bare pipeline) model format."""
     import joblib
-    from context_firewall.classifier import _load_model
+    from honeycomb.classifier import _load_model
     from sklearn.pipeline import Pipeline
     
     # Create a legacy-format model (bare pipeline)
@@ -279,8 +279,8 @@ def test_stale_compresses_not_passes_through():
 
 def test_budget_handles_dropped_entries():
     """Budget should handle entries with 0 tokens (dropped)."""
-    from context_firewall.budget import BudgetConfig, BudgetManager
-    from context_firewall.session import SessionState
+    from honeycomb.budget import BudgetConfig, BudgetManager
+    from honeycomb.session import SessionState
     
     config = BudgetConfig(target_tokens=100)
     manager = BudgetManager(config)
