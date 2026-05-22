@@ -116,7 +116,7 @@ def load_training_data(path: str | Path) -> tuple[list[str], list[str]]:
             skipped += 1
             continue
         
-        features = extract_features(row["content"], row["role"])
+        features = extract_features(row["content"], row["role"], content_type=row.get("content_type"))
         feature_text = features_to_text(features)
         
         feature_texts.append(feature_text)

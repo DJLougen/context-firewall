@@ -1,7 +1,15 @@
-"""Deterministic compression rules per content type and label.
+"""Deterministic depollution rules per content type and label.
 
-Each compressor takes raw content and produces compressed content based on
-the assigned label. These are pure functions with no learned parameters.
+Each label maps to a strategy:
+  - CORE: keep verbatim (system prompts, active goals, current errors)
+  - DISTILL: extract key information (test results, reasoning, command output)
+  - COMPACT: structural summary only (file contents, diffs)
+  - DROP: remove entirely (completed tool calls, acknowledged errors)
+  - STALE: mark for deletion (superseded file reads)
+  - ESCALATE: defer to LLM summarization (ambiguous content)
+
+The actual content removal is done here with regex extractors —
+no model reads or understands the text.
 """
 
 from __future__ import annotations

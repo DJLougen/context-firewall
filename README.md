@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <i>CPU-only inline context compression for agent harnesses</i>
+  <i>CPU-only inline context depollution for agent harnesses</i>
 </p>
 
 ---
@@ -40,7 +40,7 @@
 </p>
 
 Honey-Comb operates in two loops:
-- **Hot Loop** (per message, ~0.035ms rules / ~0.8ms ML): Classifies and compresses every message on ingestion
+- **Hot Loop** (per message, ~0.035ms rules / ~0.8ms ML): Classifies and depollutes every message on ingestion
 - **Cool Loop** (every N turns, ~10-50ms): Performs staleness detection and budget enforcement
 
 ### Performance Benchmarks
@@ -54,16 +54,16 @@ Honey-Comb achieves exceptional throughput across different modes:
 - **High-performance mode** (no locks, no metrics): 24,667 msg/s
 - **Rule-based classification**: 28,948 msg/s
 
-### Compression Ratios
+### Depollution Ratios
 
 <p align="center">
-  <img src="docs/images/compression_ratios.png" alt="Compression Ratios" width="800"/>
+  <img src="docs/images/compression_ratios.png" alt="Depollution Ratios" width="800"/>
 </p>
 
-Real-world compression examples from agent sessions:
-- **Test output**: 500 lines → "94 passed, 2 failed" + failure details (83x compression)
-- **File contents**: 69-line source file → "src/auth.py (69 lines)" (103x compression)
-- **Reasoning traces**: Verbose reasoning → key conclusions (3-5x compression)
+Real-world depollution examples from agent sessions:
+- **Test output**: 500 lines → "94 passed, 2 failed" + failure details (83x reduction)
+- **File contents**: 69-line source file → "src/auth.py (69 lines)" (103x reduction)
+- **Reasoning traces**: Verbose reasoning → key conclusions (3-5x reduction)
 
 ### Latency Breakdown
 
@@ -71,7 +71,7 @@ Real-world compression examples from agent sessions:
   <img src="docs/images/latency_breakdown.png" alt="Latency Breakdown" width="800"/>
 </p>
 
-The hot loop completes in under 1.5ms per message, making inline compression practical for real-time agent loops.
+The hot loop completes in under 1.5ms per message, making inline depollution practical for real-time agent loops.
 
 ### Statistical Validation
 
@@ -82,27 +82,27 @@ The hot loop completes in under 1.5ms per message, making inline compression pra
 All key claims validated with bootstrap confidence intervals (10,000 resamples), one-sample t-tests, and Cohen's d effect sizes across n >= 100 samples. [See full results](#statistical-significance).
 
 <p align="center">
-  <img src="docs/images/stat_compression.png" alt="Compression Ratio Distribution" width="600"/>
+  <img src="docs/images/stat_compression.png" alt="Reduction Ratio Distribution" width="600"/>
   <img src="docs/images/stat_accuracy.png" alt="Accuracy Distribution" width="600"/>
 </p>
 
 
 ### Real-World Demo
 
-The demo shows a 10-turn coding agent session compressed from **4,062 tokens to 640 tokens** (6.3x compression):
+The demo shows a 10-turn coding agent session depolluted from **4,062 tokens to 640 tokens** (6.3x reduction):
 
 ```
 Turn 1 (SYSTEM)   - 137 → 137 tokens (CORE - kept verbatim)
 Turn 2 (USER)     - 93 → 93 tokens (CORE - kept verbatim)
-Turn 3 (FILE)     - 514 → 5 tokens (COMPACT - 103x compression)
-Turn 4 (TESTS)    - 759 → 93 tokens (DISTILL - 8x compression)
-Turn 5 (REASON)   - 351 → 110 tokens (DISTILL - 3x compression)
-Turn 6 (DIFF)     - 451 → 9 tokens (COMPACT - 50x compression)
-Turn 7 (TESTS)    - 334 → 20 tokens (DISTILL - 17x compression)
-Turn 8 (TESTS)    - 585 → 20 tokens (DISTILL - 29x compression)
-Turn 9 (SUMMARY)  - 247 → 146 tokens (DISTILL - 2x compression)
+Turn 3 (FILE)     - 514 → 5 tokens (COMPACT - 103x reduction)
+Turn 4 (TESTS)    - 759 → 93 tokens (DISTILL - 8x reduction)
+Turn 5 (REASON)   - 351 → 110 tokens (DISTILL - 3x reduction)
+Turn 6 (DIFF)     - 451 → 9 tokens (COMPACT - 50x reduction)
+Turn 7 (TESTS)    - 334 → 20 tokens (DISTILL - 17x reduction)
+Turn 8 (TESTS)    - 585 → 20 tokens (DISTILL - 29x reduction)
+Turn 9 (SUMMARY)  - 247 → 146 tokens (DISTILL - 2x reduction)
 ─────────────────────────────────────────────────────
-Total: 4,062 → 640 tokens (6.3x compression, 84% reduction)
+Total: 4,062 → 640 tokens (6.3x reduction, 84% noise removed)
 ```
 
 Run the demo yourself:
@@ -124,7 +124,7 @@ All performance claims are validated with proper statistical methods (bootstrap 
 | Metric | Mean | 95% CI | Baseline | p-value | Effect Size |
 |--------|------|--------|----------|---------|-------------|
 | **Classification Accuracy** | 84.2% | [79.9%, 88.3%] | 25.0% (random) | < 0.001 | d = 1.42 |
-| **Compression Ratio** | 13.7x | [12.2x, 15.3x] | 1.0x (no compression) | < 0.001 | d = 2.33 |
+| **Reduction Ratio** | 13.7x | [12.2x, 15.3x] | 1.0x (no depollution) | < 0.001 | d = 2.33 |
 | **Token Savings** | 3,103 tokens | [2,815, 3,398] | 0 tokens | < 0.001 | — |
 | **Throughput (rule-based)** | 13,635 msg/s | [13,374, 13,867] | — | — | — |
 | **Throughput (ML-based)** | 1,028 msg/s | [995, 1,057] | — | — | — |
@@ -132,7 +132,7 @@ All performance claims are validated with proper statistical methods (bootstrap 
 All key metrics are **statistically significant** (p < 0.05) with large effect sizes.
 
 - **n=273** evaluation examples for accuracy (held-out test set)
-- **n=100** synthetic sessions for compression ratio and token savings
+- **n=100** synthetic sessions for reduction ratio and token savings
 - **n=100** trials for throughput (1000 messages per trial)
 - Bootstrap confidence intervals with 10,000 resamples
 - One-sample t-tests vs appropriate baselines
@@ -145,31 +145,43 @@ See [`docs/statistical_validation.json`](docs/statistical_validation.json) for f
 
 Agent context windows fill up with noise: 500-line test outputs where everything passed, file contents from 10 turns ago, reasoning chains about bugs that are already fixed. Today's approach is reactive — call an LLM to summarize when the window gets too long.
 
-Honey-Comb takes a different approach: **compress every message on the way in**, before it ever enters the context window. A CPU classifier (~1ms per message) labels each message with a compression strategy, and deterministic rules execute it. The LLM only sees clean, compressed context — the honey, not the wax.
+Honey-Comb takes a different approach: **depollute every message on the way in**, before it ever enters the context window. A CPU classifier (~1ms per message) labels each message with a depollution strategy, and deterministic regex extractors execute it. No model reads or understands the text. The LLM only sees clean context — the honey, not the wax.
 
 ```
 Every message enters the agent loop:
-  raw → classify(1ms) → compress → context window
-  raw → classify(1ms) → compress → context window
-  raw → classify(1ms) → compress → context window
-  
-LLM sees: clean, compressed, non-polluted context
+  raw → classify(1ms) → depollute → context window
+  raw → classify(1ms) → depollute → context window
+  raw → classify(1ms) → depollute → context window
+
+LLM sees: clean, depolluted context
 ```
 
-No batch summarization. No "when do I compress?" threshold. Every message, every time.
+No batch summarization. No "when do I depollute?" threshold. Every message, every time.
+
+## What This Is (and Isn't)
+
+**This is not compression.** Real compression (gzip, delta encoding) preserves information in a smaller form. Honey-Comb selectively deletes noise and extracts structural summaries from tool outputs. A file read replaced by `src/auth.py (69 lines)` has lost the file contents — they are not recoverable from the context window.
+
+**This is a classifier + rule engine.** The ML model (TF-IDF + VotingClassifier) picks a bucket. Hand-written regex extractors do the actual work. No model reads or understands the text being "depolluted."
+
+**This works on structured tool outputs** where "what matters" is mechanically extractable: test results, file reads, diffs, error traces, command output. It does not summarize free-form conversation.
+
+**Misclassification = data loss.** A `CORE` message mislabeled as `DROP` is gone. The 84% classification accuracy means ~16% of messages get a suboptimal strategy. For most tool outputs this is harmless (slightly more or less pruning), but it is a real risk for ambiguous content.
+
+The honest pitch: **CPU-only inline context pruning for agent harnesses.**
 
 ## The Two Loops
 
 ```
 HOT LOOP (per message, ~1ms rules / ~1ms ML):
-  raw message → classifier → label → compressor → compressed context entry
+  raw message → classifier → label → depolluter → clean context entry
 
 COOL LOOP (every N turns, ~10-50ms):
-  walk compressed context → drop stale/superseded entries
+  walk context → drop stale/superseded entries
   budget check → force-downgrade if over budget
 ```
 
-Both loops are CPU-only. The LLM only ever sees clean, compressed, non-polluted context.
+Both loops are CPU-only. The LLM only ever sees clean, depolluted context.
 
 ## Label Taxonomy
 
@@ -214,10 +226,10 @@ for raw_message in agent_messages:
         role=raw_message["role"],
         content=raw_message["content"],
     ))
-    # Send compressed.content to your LLM
+    # Send depolluted content to your LLM
     send_to_llm({"role": compressed.role, "content": compressed.content})
 
-# Get the full compressed context window
+# Get the full depolluted context window
 window = hc.get_context_window()
 ```
 
@@ -344,7 +356,7 @@ python scripts/demo_production.py
 honeycomb/
   labels.py          Label taxonomy (CORE/DISTILL/COMPACT/DROP/STALE/ESCALATE)
   features.py        Message-level feature extraction
-  compressor.py      Deterministic per-label compression rules
+  compressor.py      Deterministic per-label depollution rules (regex extractors)
   session.py         Turn tracking, staleness detection, supersession (thread-safe)
   budget.py          Token budget management
   classifier.py      TF-IDF + VotingClassifier (SGD + NB + LR)
@@ -388,7 +400,7 @@ All values below are **statistically validated** (bootstrap 95% CI, n >= 100 tri
 | Per-message latency (ML) | 0.899ms | — |
 | Throughput (rules) | 13,635 msg/s | [13,374, 13,867] |
 | Throughput (ML) | 1,028 msg/s | [995, 1,057] |
-| Compression ratio (100 sessions) | 13.7x | [12.2x, 15.3x] |
+| Reduction ratio (100 sessions) | 13.7x | [12.2x, 15.3x] |
 | Token savings per session | 3,103 tokens | [2,815, 3,398] |
 | Tests | 129 passed | — |
 
@@ -397,7 +409,7 @@ The end-to-end accuracy (84.2%) reflects the full pipeline including content-typ
 
 ### Demo: Raw vs Clean
 
-Run `python scripts/demo_pollution.py` to see a 10-turn coding agent session compressed in real time:
+Run `python scripts/demo_pollution.py` to see a 10-turn coding agent session depolluted in real time:
 
 | Turn | Raw | Clean | What happened |
 |------|-----|-------|---------------|
@@ -410,23 +422,23 @@ Run `python scripts/demo_pollution.py` to see a 10-turn coding agent session com
 | Test pass | 334 tokens | 20 tokens | `12 passed in 1.15s` |
 | Full suite pass | 585 tokens | 20 tokens | `213 passed in 4.72s` |
 | Final summary | 247 tokens | 146 tokens | Headers + numbered change list |
-| **Total** | **4,062 tokens** | **640 tokens** | **6.3x compression, 84% reduction** |
+| **Total** | **4,062 tokens** | **640 tokens** | **6.3x reduction, 84% noise removed** |
 
 ## How It Works
 
 ### Hot Loop (per message)
 
 1. **Extract features** from the message: role, content type signals (paths, errors, code blocks), turn age, duplicate detection.
-2. **Classify** the message into a compression label using either rules or the ML classifier.
-3. **Compress** using deterministic rules specific to the content type and label.
-4. **Record** in the session state for staleness tracking.
+1. **Classify** the message into a depollution label using either rules or the ML classifier.
+2. **Depollute** using deterministic regex extractors specific to the content type and label. No model reads the text.
+3. **Record** in the session state for staleness tracking.
 
 ### Cool Loop (every N turns)
 
-1. **Staleness check**: Walk the compressed context and drop entries that are stale (file read before a later edit) or superseded (file read again later).
-2. **Budget enforcement**: If over the token budget, force-downgrade the lowest-priority entries to more aggressive compression.
+1. **Staleness check**: Walk the context and drop entries that are stale (file read before a later edit) or superseded (file read again later).
+2. **Budget enforcement**: If over the token budget, force-downgrade the lowest-priority entries to more aggressive depollution.
 
-### Compression Examples
+### Depollution Examples
 
 **Test output** (DISTILL):
 ```
@@ -458,13 +470,13 @@ Honey-Comb applies the same principle as [busyBee-cpu](https://github.com/DJLoug
 
 | | busyBee-cpu | Honey-Comb |
 |--|-------------|------------|
-| **Problem** | Tool selection in agent loops | Context compression in agent loops |
-| **Principle** | Most decisions are mechanical | Most compression is mechanical |
-| **Classifier** | Which of 4 actions to take | Which compression strategy to apply |
-| **Resolver** | Fill arguments from state | Execute compression per content type |
+| **Problem** | Tool selection in agent loops | Context depollution in agent loops |
+| **Principle** | Most decisions are mechanical | Most depollution is mechanical |
+| **Classifier** | Which of 4 actions to take | Which depollution strategy to apply |
+| **Resolver** | Fill arguments from state | Execute extraction per content type |
 | **Escalation** | Defer to LLM for reasoning | Defer to LLM for ambiguous content |
 
-Both use the same architecture: TF-IDF + VotingClassifier on CPU, with deterministic resolvers/compressors, escalating to the LLM only when uncertain.
+Both use the same architecture: TF-IDF + VotingClassifier on CPU, with deterministic resolvers/extractors, escalating to the LLM only when uncertain.
 
 ## Dependencies
 

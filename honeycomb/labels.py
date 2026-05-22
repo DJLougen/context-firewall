@@ -1,4 +1,4 @@
-"""Label taxonomy and content type definitions for context classification."""
+"""Label taxonomy and content type definitions for context depollution."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ from enum import Enum
 
 
 class Label(str, Enum):
-    """Compression strategy labels for context messages.
-    
+    """Depollution strategy labels for context messages.
+
     The classifier assigns one of these to each incoming message.
-    The compressor then applies a deterministic strategy based on this label.
+    Deterministic regex extractors then apply the strategy — no model
+    reads or understands the text.
     """
     
     CORE = "core"
@@ -48,8 +49,8 @@ class Label(str, Enum):
 
 class ContentType(str, Enum):
     """Content types for messages in an agent session.
-    
-    The compressor uses these to apply type-specific compression rules.
+
+    The depolluter uses these to apply type-specific extraction rules.
     """
     
     SYSTEM = "system"

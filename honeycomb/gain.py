@@ -98,6 +98,7 @@ class GainTracker:
         self._loaded = False
         self._buffer: list[str] = []
         self._dir_ensured = False
+        self._file_handle = None
 
     @property
     def _path(self) -> Path:
@@ -148,22 +149,28 @@ class GainTracker:
         self._ensure_loaded()
         self._entries.append(entry)
 
-        # Write to disk immediately for cross-instance persistence
+        # Write immediately via persistent file handle (avoids open/close overhead)
         if not self._dir_ensured:
             self._data_dir.mkdir(parents=True, exist_ok=True)
             self._dir_ensured = True
-        with open(self._path, "a") as f:
-            f.write(json.dumps(entry.to_dict()) + "\n")
+        if self._file_handle is None:
+            self._file_handle = open(self._path, "a")
+        self._file_handle.write(json.dumps(entry.to_dict()) + "\n")
+        self._file_handle.flush()
 
         return entry
 
     def _flush_buffer(self) -> None:
-        """No-op (kept for API compat — writes are immediate)."""
+        """No-op (writes are immediate via persistent file handle)."""
         pass
 
     def __del__(self) -> None:
-        """No-op (writes are immediate)."""
-        pass
+        """Close persistent file handle on destruction."""
+        try:
+            if self._file_handle is not None:
+                self._file_handle.close()
+        except Exception:
+            pass
 
     def summary(self) -> str:
         """Generate a summary of total token savings."""
@@ -342,6 +349,10 @@ class GainTracker:
     def clear(self) -> None:
         """Clear all recorded data."""
         self._entries.clear()
+        # Close persistent file handle before deleting (Windows requires this)
+        if self._file_handle is not None:
+            self._file_handle.close()
+            self._file_handle = None
         if self._path.exists():
             self._path.unlink()
 

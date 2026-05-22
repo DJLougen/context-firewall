@@ -1,4 +1,4 @@
-"""Token budget management for context window compression.
+"""Token budget management for context window depollution.
 
 The budget manager enforces a target token budget on the context window.
 When the budget is exceeded, it force-downgrades the lowest-priority

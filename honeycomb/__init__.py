@@ -1,4 +1,4 @@
-"""Honey-Comb: CPU-only inline context compression for agent harnesses. Keep the honey, drop the wax."""
+"""Honey-Comb: CPU-only inline context depollution for agent harnesses. Keep the honey, drop the wax."""
 
 __version__ = "0.3.0"
 

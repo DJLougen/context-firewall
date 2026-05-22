@@ -7,7 +7,7 @@ The session tracker maintains a record of what's in the context window:
 - Turn age for each entry
 
 This powers the cool loop's staleness checks and the classifier's
-session-context features.
+session-context features for depollution decisions.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from honeycomb.labels import ContentType, Label
 
 @dataclass
 class ContextEntry:
-    """A single entry in the compressed context window."""
+    """A single entry in the depolluted context window."""
     
     turn: int
     """Turn number when this entry was added."""
@@ -36,13 +36,13 @@ class ContextEntry:
     """Classified content type."""
     
     label: Label
-    """Assigned compression label."""
+    """Assigned depollution label."""
     
     original_content: str
-    """The raw content before compression."""
+    """The raw content before depollution."""
     
     compressed_content: str
-    """The compressed content (what the LLM sees)."""
+    """The depolluted content (what the LLM sees)."""
     
     content_hash: str
     """SHA-256 hash of original content for dedup."""

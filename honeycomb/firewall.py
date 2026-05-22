@@ -1,17 +1,17 @@
-"""Honey-Comb: main orchestrator for inline context compression.
+"""Honey-Comb: main orchestrator for inline context depollution.
 
 Keep the honey, drop the wax.
 
 The comb processes every message through two loops:
 
 HOT LOOP (per message, ~1-5ms):
-  raw message → classify → compress → record in session
+  raw message → classify → depollute → record in session
 
 COOL LOOP (every N turns, ~10-50ms):
-  walk compressed context → drop stale/superseded entries
+  walk context → drop stale/superseded entries
   budget check → force-downgrade if over budget
 
-Both loops are CPU-only. The LLM only sees clean, compressed context.
+Both loops are CPU-only. The LLM only sees clean, depolluted context.
 """
 
 
@@ -58,16 +58,16 @@ class Message:
 
 @dataclass
 class CompressedMessage:
-    """Output message from the firewall."""
+    """Output message from the firewall — depolluted, not compressed."""
     
     role: str
     """Message role (preserved from input)."""
     
     content: str
-    """Compressed content (what the LLM sees)."""
+    """Depolluted content (what the LLM sees)."""
     
     label: Label
-    """Compression label that was applied."""
+    """Depollution label that was applied."""
     
     content_type: ContentType
     """Inferred or provided content type."""
@@ -100,15 +100,15 @@ def _infer_content_type(message: Message) -> ContentType:
     """Infer content type from role and content signals."""
     role = message.role.lower()
     content = message.content
-    
+
     # System messages
     if role == "system":
         return ContentType.SYSTEM
-    
+
     # User messages are usually goals
     if role == "user":
         return ContentType.USER_GOAL
-    
+
     # Assistant messages: reasoning, patches, or tool calls
     if role == "assistant":
         if re.search(r"^[-+]{3} |^diff --git|^@@ ", content, re.M):
@@ -116,36 +116,119 @@ def _infer_content_type(message: Message) -> ContentType:
         # JSON tool call: {"name": "read_file", ...}
         if re.search(r'"name"\s*:\s*"(?:read_file|run_tests|apply_patch|search|run_command)"', content):
             return ContentType.TOOL_CALL
+        # YAML-style tool call: tool_name: run_command\nargs: {...}
+        if re.search(r"^tool_name\s*:\s*\w+", content, re.M):
+            return ContentType.TOOL_CALL
+        # Generic JSON tool call: {"name": "...", ...} or {"tool": "..."}
+        if re.search(r'"(?:name|tool|function)"\s*:\s*"[^"]+"', content) and re.search(r'"(?:args|parameters|arguments|params)"\s*:', content):
+            return ContentType.TOOL_CALL
         return ContentType.AGENT_REASONING
-    
+
     # Tool messages: infer from content
     if role == "tool":
-        # Git diff / patch output
+        # Git diff / patch output (check early — diffs contain code-like lines)
         if re.search(r"^diff --git|^[-+]{3} [ab]/", content, re.M):
             return ContentType.AGENT_PATCH
 
-        # Test output
-        if re.search(r"\d+\s*(passed|failed|error)", content, re.I):
+        # Command output with $ prompt — check BEFORE git/test patterns
+        # because `$ git status` is command output, and `$ python -m pytest` is command not test
+        if re.search(r"^\$\s+\w+", content, re.M):
+            return ContentType.TOOL_RESULT_COMMAND
+
+        # Git status/log/push/pull output
+        if re.search(
+            r"On branch |HEAD detached|Changes (not |to be )?staged|"
+            r"nothing to commit|Untracked files:|Your branch is|"
+            r"^\*?\s+[0-9a-f]{7,}\s+.+$|"  # git log one-line (hex hash required)
+            r"^commit [0-9a-f]{7,40}|"
+            r"\[detached HEAD|Enumerating objects|Counting objects|"
+            r"Writing objects|remote:|To github\.com|"
+            r"Already up to date|fast-forward|merge conflict|"
+            r"^\[\S+ [0-9a-f]{7,}\]|\d+ files? changed.*insertions|"
+            r"create mode \d+ |files? changed, \d+ insertions",
+            content, re.M,
+        ):
+            return ContentType.TOOL_RESULT_GIT
+
+        # Test output (multiple formats)
+        if re.search(
+            r"\d+\s*(passed|failed|error|passing|failing)|"  # pytest / mocha / jest
+            r"test result:\s*\w+|"  # cargo test
+            r"(passing|failing)\s+\d+|"  # mocha/jest (word-first)
+            r"[✓✗✔✘]\s+|"  # mocha/jest symbols
+            r"^ok\s+\S+.*\d+\.\d+s$|"  # go test ok
+            r"^FAIL\s+\S+",  # go test fail
+            content, re.M | re.I,
+        ):
             return ContentType.TOOL_RESULT_TEST
 
-        # File content (has code structure) - check BEFORE error traces
+        # Build output
+        if re.search(
+            r"Compiling\s+\S+|"  # cargo build
+            r"Finished\s+(dev|release)\s+\[|"  # cargo build
+            r"error\[E\d+\]:|"  # rustc error
+            r"^tsc\s|TS\d{4,5}:|"  # typescript
+            r"Build (complete|succeeded|failed)|"
+            r"Successfully built\s+\S+",
+            content, re.M,
+        ):
+            return ContentType.TOOL_RESULT_BUILD
+
+        # Lint output
+        if re.search(
+            r"Found\s+\d+\s+errors?|"
+            r"\d+ problems? \(\d+ errors?, \d+ warnings?\)|"  # eslint
+            r"(warning|error)\[|"  # clippy / ruff
+            r"^src/\S+:\d+:\d+: [A-Z]\d{2,4}\s|"  # ruff line
+            r"(rubocop|golangci-lint|pylint)\s",
+            content, re.M,
+        ):
+            return ContentType.TOOL_RESULT_LINT
+
+        # Container output
+        if re.search(
+            r"^CONTAINER\s+ID\s|^IMAGE\s+|"  # docker ps
+            r"REPOSITORY\s+TAG\s+IMAGE|"  # docker images
+            r"^NAME\s+READY\s+STATUS\s|"  # kubectl pods
+            r"^(?:service|deployment|pod)/\S+\s+",  # kubectl
+            content, re.M,
+        ):
+            return ContentType.TOOL_RESULT_CONTAINER
+
+        # File content (has code structure) — check BEFORE error traces
         # because files may define Error classes
-        if re.search(r"^(class|def|import|from|export|function) ", content, re.M):
+        if re.search(r"^(class|def|import|from|export|function|pub |fn |struct |enum |impl )", content, re.M):
             return ContentType.TOOL_RESULT_FILE
 
-        # Error traces (require actual traceback, not just class definitions)
-        if re.search(r"Traceback \(most recent call last\)|^\w+Error: |^\w+Exception: ", content, re.M):
+        # Error traces — check BEFORE search results because JS error traces
+        # contain file:line: patterns (e.g., "at processItem (src/utils.js:42:5)")
+        if re.search(
+            r"Traceback \(most recent call last\)|"
+            r"^\w+Error: |^\w+Exception: |"
+            r"^Error: |"  # JS errors
+            r"panic: |^fatal error: ",  # Go panics
+            content, re.M,
+        ):
             return ContentType.TOOL_RESULT_ERROR
+
+        # Directory listing
+        if re.search(
+            r"^total\s+\d+$|"  # ls -l
+            r"^[d-][rwx-]{9}\s|"  # ls -l perms
+            r"^[├│└].*[├│└]|[─]{3,}",  # tree output
+            content, re.M,
+        ):
+            return ContentType.TOOL_RESULT_DIRECTORY
 
         # Search results (file:line patterns)
         if re.search(r"[^\s:]+:\d+:", content):
             return ContentType.TOOL_RESULT_SEARCH
 
-        # Command output (has exit code or $ prompt)
-        if re.search(r"exit[= ]+\d+|^\$\s+\w+", content, re.M):
+        # Command output (has exit code but no $ prompt)
+        if re.search(r"exit[= ]+\d+", content, re.M):
             return ContentType.TOOL_RESULT_COMMAND
 
-        # Default: unknown (not command)
+        # Default: unknown
         return ContentType.UNKNOWN
 
 # ---------------------------------------------------------------------------
@@ -154,59 +237,79 @@ def _infer_content_type(message: Message) -> ContentType:
 
 def _classify_rules(message: Message, content_type: ContentType, session: SessionState) -> Label:
     """Rule-based label assignment.
-    
+
     This is the fallback when no ML classifier is loaded.
     It handles the obvious cases mechanically.
     """
     role = message.role.lower()
     content = message.content
-    
+
     # System prompts are always CORE
     if content_type == ContentType.SYSTEM:
         return Label.CORE
-    
+
     # Active user goals are CORE
     if content_type == ContentType.USER_GOAL:
         return Label.CORE
-    
+
     # Tool calls are DROP (the result is what matters)
     if content_type == ContentType.TOOL_CALL:
         return Label.DROP
-    
+
     # Error traces: CORE if recent, DISTILL if older
     if content_type == ContentType.TOOL_RESULT_ERROR:
         if session.turn_count <= 2:
             return Label.CORE
         return Label.DISTILL
-    
+
     # Test output: DISTILL (extract summary)
     if content_type == ContentType.TOOL_RESULT_TEST:
         return Label.DISTILL
-    
-    # File content: COMPACT if large, DISTILL if small
+
+    # File content: COMPACT if large (>200 chars), DISTILL if small
     if content_type == ContentType.TOOL_RESULT_FILE:
-        if len(content) > 2000:
+        if len(content) > 200:
             return Label.COMPACT
         return Label.DISTILL
-    
+
     # Command output: DISTILL
     if content_type == ContentType.TOOL_RESULT_COMMAND:
         return Label.DISTILL
-    
+
     # Search results: DISTILL
     if content_type == ContentType.TOOL_RESULT_SEARCH:
         return Label.DISTILL
-    
+
+    # Git output: DISTILL (extract key changes/status)
+    if content_type == ContentType.TOOL_RESULT_GIT:
+        return Label.DISTILL
+
+    # Build output: DISTILL (extract errors or success)
+    if content_type == ContentType.TOOL_RESULT_BUILD:
+        return Label.DISTILL
+
+    # Lint output: DISTILL (extract violations)
+    if content_type == ContentType.TOOL_RESULT_LINT:
+        return Label.DISTILL
+
+    # Container output: DISTILL
+    if content_type == ContentType.TOOL_RESULT_CONTAINER:
+        return Label.DISTILL
+
+    # Directory listing: COMPACT (structural summary)
+    if content_type == ContentType.TOOL_RESULT_DIRECTORY:
+        return Label.COMPACT
+
     # Agent patches: DISTILL (keep summary of what changed)
     if content_type == ContentType.AGENT_PATCH:
         return Label.DISTILL
-    
-    # Agent reasoning: keep short reasoning verbatim, distill long reasoning
+
+    # Agent reasoning: COMPACT for long multi-step (>=400 chars), DISTILL for shorter
     if content_type == ContentType.AGENT_REASONING:
-        if len(content) < 300:
-            return Label.CORE
+        if len(content) >= 400:
+            return Label.COMPACT
         return Label.DISTILL
-    
+
     # Default: DISTILL
     return Label.DISTILL
 
@@ -216,27 +319,49 @@ def _classify_rules(message: Message, content_type: ContentType, session: Sessio
 # ---------------------------------------------------------------------------
 
 class MLClassifier:
-    """Wraps a trained scikit-learn classifier for label prediction."""
-    
-    def __init__(self, model: Any) -> None:
+    """Wraps a trained scikit-learn classifier for label prediction.
+
+    When prediction confidence is below the threshold, returns ESCALATE
+    instead of guessing — the compressor will defer to the LLM for
+    ambiguous content rather than risk data loss from misclassification.
+    """
+
+    def __init__(self, model: Any, confidence_threshold: float = 0.0) -> None:
         self.model = model
-    
+        self.confidence_threshold = confidence_threshold
+
     def predict(self, features_text: str) -> Label:
-        """Predict label from feature text."""
+        """Predict label from feature text.
+
+        Returns ESCALATE if confidence is below threshold.
+        Uses a single predict_proba call to get both prediction and confidence.
+        When threshold is 0 (default), uses the fast predict path.
+        """
+        if self.confidence_threshold > 0 and hasattr(self.model, "predict_proba"):
+            probas = self.model.predict_proba([features_text])[0]
+            max_idx = max(range(len(probas)), key=lambda i: probas[i])
+            max_prob = probas[max_idx]
+            if max_prob < self.confidence_threshold:
+                return Label.ESCALATE
+            try:
+                return Label(self.model.classes_[max_idx])
+            except (ValueError, IndexError):
+                return Label.DISTILL
+
         prediction = self.model.predict([features_text])[0]
         try:
             return Label(prediction)
         except ValueError:
             return Label.DISTILL  # Fallback
-    
+
     def predict_proba(self, features_text: str) -> dict[Label, float]:
         """Predict label probabilities."""
         if not hasattr(self.model, "predict_proba"):
             return {}
-        
+
         probas = self.model.predict_proba([features_text])[0]
         classes = self.model.classes_
-        
+
         result = {}
         for cls, prob in zip(classes, probas):
             try:
@@ -244,7 +369,7 @@ class MLClassifier:
                 result[label] = float(prob)
             except ValueError:
                 pass
-        
+
         return result
 
 
@@ -253,7 +378,7 @@ class MLClassifier:
 # ---------------------------------------------------------------------------
 
 class HoneyComb:
-    """Main entry point for inline context compression.
+    """Main entry point for inline context depollution.
 
     Usage:
         comb = HoneyComb()
@@ -331,17 +456,24 @@ class HoneyComb:
     def _process_impl(self, message: Message) -> CompressedMessage:
         """Internal implementation of process()."""
         try:
-            # Advance turn
+            # Advance turn before classification (classifier uses turn_count)
             self.session.advance_turn()
 
             # Infer content type if not provided
             content_type = message.content_type or _infer_content_type(message)
 
-            # Extract file paths once (optimization)
-            file_paths = _extract_file_paths(message.content)
+            # Extract file paths for messages that reference files
+            # (tool results, patches, and tool calls — needed for staleness tracking)
+            if (message.role.lower() == "tool"
+                    or content_type.is_tool_result()
+                    or content_type == ContentType.AGENT_PATCH
+                    or content_type == ContentType.TOOL_CALL):
+                file_paths = _extract_file_paths(message.content)
+            else:
+                file_paths = []
 
-            # Extract features (pass file_paths to avoid re-extraction)
-            features = extract_features(message.content, message.role, self.session, file_paths)
+            # Extract features (pass content_type for ML classification)
+            features = extract_features(message.content, message.role, self.session, file_paths, content_type=content_type.value)
             features_text = features_to_text(features)
 
             # Classify (hot loop: ~1-3ms)
