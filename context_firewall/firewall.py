@@ -108,30 +108,33 @@ def _infer_content_type(message: Message) -> ContentType:
     
     # Tool messages: infer from content
     if role == "tool":
+        # Git diff / patch output
+        if re.search(r"^diff --git|^[-+]{3} [ab]/", content, re.M):
+            return ContentType.AGENT_PATCH
+
         # Test output
         if re.search(r"\d+\s*(passed|failed|error)", content, re.I):
             return ContentType.TOOL_RESULT_TEST
-        
-        # Error traces
-        if re.search(r"Traceback|Error:|Exception:", content):
-            return ContentType.TOOL_RESULT_ERROR
-        
-        # File content (has code structure)
+
+        # File content (has code structure) - check BEFORE error traces
+        # because files may define Error classes
         if re.search(r"^(class|def|import|from|export|function) ", content, re.M):
             return ContentType.TOOL_RESULT_FILE
-        
+
+        # Error traces (require actual traceback, not just class definitions)
+        if re.search(r"Traceback \(most recent call last\)|^\w+Error: |^\w+Exception: ", content, re.M):
+            return ContentType.TOOL_RESULT_ERROR
+
         # Search results (file:line patterns)
         if re.search(r"[^\s:]+:\d+:", content):
             return ContentType.TOOL_RESULT_SEARCH
-        
+
         # Command output (has exit code or $ prompt)
         if re.search(r"exit[= ]+\d+|^\$\s+\w+", content, re.M):
             return ContentType.TOOL_RESULT_COMMAND
 
         # Default: unknown (not command)
-    
-    return ContentType.UNKNOWN
-
+        return ContentType.UNKNOWN
 
 # ---------------------------------------------------------------------------
 # Rule-based classifier (used when no ML model is loaded)
@@ -186,11 +189,11 @@ def _classify_rules(message: Message, content_type: ContentType, session: Sessio
     if content_type == ContentType.AGENT_PATCH:
         return Label.DISTILL
     
-    # Agent reasoning: DISTILL if short, COMPACT if long
+    # Agent reasoning: keep short reasoning verbatim, distill long reasoning
     if content_type == ContentType.AGENT_REASONING:
-        if len(content) < 200:
-            return Label.DISTILL
-        return Label.COMPACT
+        if len(content) < 300:
+            return Label.CORE
+        return Label.DISTILL
     
     # Default: DISTILL
     return Label.DISTILL

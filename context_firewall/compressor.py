@@ -27,35 +27,46 @@ def compress_test_output(content: str, label: Label) -> str:
         return ""
     
     lines = content.split("\n")
-    
+
     # Look for summary line (pytest-style: "94 passed, 2 failed")
     summary = None
-    failures = []
-    in_failure_section = False
-    
+    failed_tests = []
+    error_messages = []
+    in_failures = False
+
     for i, line in enumerate(lines):
-        # Pytest summary
-        if re.search(r"\d+ passed|\d+ failed|\d+ error", line, re.I):
+        # Pytest summary line (with or without = decoration)
+        if re.search(r"=*\s*\d+\s*(passed|failed|error)", line, re.I):
             summary = line.strip()
-        
-        # Capture failure details - look for actual error messages
-        if re.search(r"Error|Exception|AssertionError|assert", line, re.I):
-            failures.append(line.strip())
-            if len(failures) >= 5:  # Cap at 5 failures
-                break
-    
+
+        # Detect FAILURES section
+        if "FAILURES" in line or ("FAILED" in line and "::" not in line):
+            in_failures = True
+
+        # Capture FAILED test names from the listing
+        if "FAILED" in line and "::" in line:
+            match = re.search(r"(\S+::\S+)", line)
+            if match and match.group(1) not in failed_tests:
+                failed_tests.append(match.group(1))
+
+        # Capture error messages in FAILURES section
+        if in_failures and re.search(r"(Error|Exception|assert)", line, re.I):
+            error_msg = line.strip()
+            if error_msg and error_msg not in error_messages and "FAILED" not in error_msg:
+                error_messages.append(error_msg)
+                if len(error_messages) >= 3:
+                    break
+
     if label == Label.COMPACT:
         return summary or f"Test output: {len(lines)} lines"
-    
-    # DISTILL
-    if summary and failures:
-        return f"{summary}\nFailures:\n" + "\n".join(failures[:3])
-    elif summary:
-        return summary
-    else:
-        # Fallback: last 5 lines
-        return "\n".join(lines[-5:])
 
+    # DISTILL: summary + failed test names + error messages
+    result = summary or f"Test output: {len(lines)} lines"
+    if failed_tests:
+        result += "\n" + "\n".join(f"FAILED {t}" for t in failed_tests)
+    if error_messages:
+        result += "\n" + "\n".join(error_messages)
+    return result
 
 def compress_file_content(content: str, label: Label) -> str:
     """Compress file read results.
@@ -255,22 +266,40 @@ def compress_agent_patch(content: str, label: Label) -> str:
 def compress_reasoning(content: str, label: Label) -> str:
     """Compress agent reasoning.
 
+    CORE: Keep verbatim (short reasoning is valuable).
     DISTILL: Extract conclusion/decision.
-    COMPACT: "Reasoning: [first 50 chars]"
+    COMPACT: "Reasoning: [first 200 chars]"
     DROP: Empty string.
     """
+    if label == Label.CORE:
+        return content
+
     if label == Label.DROP:
         return ""
 
     if label == Label.COMPACT:
-        first_line = content.split("\n")[0][:50]
-        return f"Reasoning: {first_line}..."
+        preview = content[:200].replace("\n", " ").strip()
+        return f"Reasoning: {preview}..."
 
-    # DISTILL: look for conclusion markers
-    # Avoid "so" — too common in English, causes false positives
+    # DISTILL: extract the key decision/action
+    lines = content.split("\n")
+
+    # Look for structured content first (headers, bullet points, numbered lists)
+    key_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#") or stripped.startswith("- ") or stripped.startswith("* "):
+            key_lines.append(stripped)
+        elif re.match(r"^\d+\.\s+", stripped):  # Numbered list
+            key_lines.append(stripped)
+
+    if key_lines:
+        return "Decision:\n" + "\n".join(key_lines[:10])
+
+    # Look for conclusion markers
     conclusion_markers = [
         r"(?:therefore|thus|hence|conclusion)[:\s]+(.{10,}?)(?:\.|$)",
-        r"(?:decided to|will|should|going to)\s+(.{10,}?)(?:\.|$)",
+        r"(?:decided to|going to)\s+(.{10,}?)(?:\.|$)",
         r"(?:the fix is|the issue is|the problem is)[:\s]+(.{10,}?)(?:\.|$)",
     ]
 
@@ -278,15 +307,14 @@ def compress_reasoning(content: str, label: Label) -> str:
         match = re.search(pattern, content, re.I | re.M)
         if match:
             result = match.group(1).strip()
-            return f"Decision: {result[:200]}"
+            return f"Decision: {result[:300]}"
 
-    # Fallback: last non-empty sentence
-    sentences = re.split(r"[.!?]\s+", content)
-    last = next((s.strip() for s in reversed(sentences) if s.strip()), "")
-    if last:
-        return f"Decision: {last[:200]}"
+    # Fallback: first paragraph (usually contains the main point)
+    paragraphs = content.split("\n\n")
+    if paragraphs and paragraphs[0].strip():
+        return f"Reasoning: {paragraphs[0].strip()[:300]}"
 
-    return f"Reasoning: {content[:200]}..."
+    return f"Reasoning: {content[:300]}..."
 
 def compress_user_goal(content: str, label: Label) -> str:
     """Compress user goals.
